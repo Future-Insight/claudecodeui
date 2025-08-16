@@ -12,6 +12,18 @@
   }
 }
 
+/* Fade in animation for notifications */
+@keyframes fade-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @-webkit-keyframes spin {
   0% {
     -webkit-transform: rotate(0deg);
@@ -465,26 +477,33 @@
     
     /* Better mobile touch targets */
     .mobile-touch-target {
-      @apply min-h-[44px] min-w-[44px];
+      min-height: 44px;
+      min-width: 44px;
     }
     
-    /* Chat message improvements */
-    .chat-message.user {
-      @apply justify-end;
+    /* Chat message improvements - compact mobile layout */
+    .chat-message {
+      width: 100%;
     }
     
-    .chat-message.user > div {
-      @apply max-w-[85%];
+    .chat-message > div {
+      width: 100%;
     }
     
-    .chat-message.assistant > div,
-    .chat-message.error > div {
-      @apply w-full sm:max-w-[95%];
+    /* Reduce padding on mobile */
+    .chat-message .p-3 {
+      padding: 0.5rem;
+    }
+    
+    .chat-message .p-2 {
+      padding: 0.375rem;
     }
     
     /* Session name truncation on mobile */
     .session-name-mobile {
-      @apply truncate;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
       max-width: calc(100vw - 120px); /* Account for sidebar padding and buttons */
     }
     
@@ -627,6 +646,10 @@
     animation: spin 1s linear infinite;
   }
   
+  .animate-fade-in {
+    animation: fade-in 0.3s ease-out;
+  }
+  
   /* Force hardware acceleration for smoother animation on mobile */
   .loading-spinner {
     animation: spin 1s linear infinite;
@@ -735,5 +758,151 @@
   .dark select option {
     background-color: rgb(31 41 55) !important;
     color: rgb(243 244 246) !important;
+  }
+  
+  /* Compact UI utilities */
+  .compact-spacing > * + * {
+    margin-top: 0.25rem;
+  }
+  
+  .compact-padding {
+    padding: 0.5rem;
+  }
+  
+  .compact-text {
+    font-size: 0.75rem;
+    line-height: 1rem;
+  }
+  
+  .compact-border {
+    border-radius: 0.375rem;
+    border-width: 1px;
+  }
+  
+  /* Ultra-compact mode for mobile */
+  @media (max-width: 640px) {
+    .ultra-compact .space-y-3 > * + * {
+      margin-top: 0.25rem !important; /* 1 */
+    }
+    
+    .ultra-compact .space-y-2 > * + * {
+      margin-top: 0.125rem !important; /* 0.5 */
+    }
+    
+    .ultra-compact .p-3 {
+      padding: 0.5rem !important; /* 2 */
+    }
+    
+    .ultra-compact .p-2 {
+      padding: 0.375rem !important; /* 1.5 */
+    }
+    
+    .ultra-compact .mb-2 {
+      margin-bottom: 0.25rem !important; /* 1 */
+    }
+    
+    .ultra-compact .mb-1 {
+      margin-bottom: 0.125rem !important; /* 0.5 */
+    }
+  }
+  
+  /* Compact message spacing */
+  .chat-message {
+    margin-bottom: 0.5rem;
+  }
+  
+  .chat-message + .chat-message {
+    margin-top: 0.5rem;
+  }
+  
+  /* Even more compact spacing for consecutive messages from the same source */
+  .chat-message.grouped {
+    margin-bottom: 0.25rem;
+  }
+  
+  .chat-message.grouped + .chat-message.grouped {
+    margin-top: 0.25rem;
+  }
+  
+  /* Markdown compact styles */
+  .chat-message .prose {
+    line-height: 1.4;
+    margin: 0;
+  }
+  
+  .chat-message .prose p {
+    margin: 0.5rem 0;
+  }
+  
+  .chat-message .prose p:first-child {
+    margin-top: 0;
+  }
+  
+  .chat-message .prose p:last-child {
+    margin-bottom: 0;
+  }
+  
+  .chat-message .prose h1,
+  .chat-message .prose h2, 
+  .chat-message .prose h3,
+  .chat-message .prose h4,
+  .chat-message .prose h5,
+  .chat-message .prose h6 {
+    margin: 0.75rem 0 0.5rem 0;
+  }
+  
+  .chat-message .prose h1:first-child,
+  .chat-message .prose h2:first-child,
+  .chat-message .prose h3:first-child,
+  .chat-message .prose h4:first-child,
+  .chat-message .prose h5:first-child,
+  .chat-message .prose h6:first-child {
+    margin-top: 0;
+  }
+  
+  .chat-message .prose ul,
+  .chat-message .prose ol {
+    margin: 0.5rem 0;
+    padding-left: 1.5rem;
+  }
+  
+  .chat-message .prose li {
+    margin: 0.25rem 0;
+  }
+  
+  /* Inline code styling - no special treatment */
+  .chat-message .prose code:not(pre code) {
+    background: transparent;
+    padding: 0;
+    border: none;
+    font-size: inherit;
+    color: inherit;
+  }
+  
+  /* Code block optimization - reduced padding */
+  .chat-message .prose pre {
+    margin: 0.75rem 0;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.375rem;
+    overflow-x: auto;
+  }
+  
+  .chat-message .prose pre:first-child {
+    margin-top: 0;
+  }
+  
+  .chat-message .prose pre:last-child {
+    margin-bottom: 0;
+  }
+  
+  /* Blockquote compact */
+  .chat-message .prose blockquote {
+    margin: 0.75rem 0;
+    padding-left: 1rem;
+    border-left: 3px solid #e5e7eb;
+  }
+  
+  .dark .chat-message .prose blockquote {
+    border-left-color: #4b5563;
   }
 }

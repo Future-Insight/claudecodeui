@@ -95,6 +95,21 @@ function Sidebar({
     };
   };
 
+  // Function to update session summary
+  const updateSessionSummary = async (projectName, sessionId, newSummary) => {
+    try {
+      const response = await api.updateSessionSummary(projectName, sessionId, newSummary);
+      if (response.success) {
+        // Refresh the projects to get updated session data
+        onRefresh();
+        setEditingSession(null);
+        setEditingSessionName('');
+      }
+    } catch (error) {
+      console.error('Failed to update session summary:', error);
+    }
+  };
+
   // Auto-update timestamps every minute
   useEffect(() => {
     const timer = setInterval(() => {

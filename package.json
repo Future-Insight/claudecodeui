@@ -10,7 +10,9 @@
     "client": "vite --host",
     "build": "vite build",
     "preview": "vite preview",
-    "start": "npm run build && npm run server"
+    "start": "npm run build && npm run server",
+    "lint": "eslint src/**/*.{js,jsx,ts,tsx}",
+    "lint:fix": "eslint src/**/*.{js,jsx,ts,tsx} --fix"
   },
   "keywords": [
     "claude",

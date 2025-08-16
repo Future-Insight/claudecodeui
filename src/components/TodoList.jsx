@@ -10,12 +10,12 @@ const TodoList = ({ todos, isResult = false }) => {
   const getStatusIcon = (status) => {
     switch (status) {
       case 'completed':
-        return <CheckCircle2 className="w-4 h-4 text-green-500 dark:text-green-400" />;
+        return <CheckCircle2 className="w-3 h-3 text-green-500 dark:text-green-400" />;
       case 'in_progress':
-        return <Clock className="w-4 h-4 text-blue-500 dark:text-blue-400" />;
+        return <Clock className="w-3 h-3 text-blue-500 dark:text-blue-400" />;
       case 'pending':
       default:
-        return <Circle className="w-4 h-4 text-gray-400 dark:text-gray-500" />;
+        return <Circle className="w-3 h-3 text-gray-400 dark:text-gray-500" />;
     }
   };
 
@@ -44,9 +44,9 @@ const TodoList = ({ todos, isResult = false }) => {
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-1">
       {isResult && (
-        <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+        <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
           Todo List ({todos.length} {todos.length === 1 ? 'item' : 'items'})
         </div>
       )}
@@ -54,33 +54,33 @@ const TodoList = ({ todos, isResult = false }) => {
       {todos.map((todo) => (
         <div
           key={todo.id}
-          className="flex items-start gap-3 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm hover:shadow-md dark:shadow-gray-900/50 transition-shadow"
+          className="flex items-center gap-2 px-2 py-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-xs hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors"
         >
-          <div className="flex-shrink-0 mt-0.5">
+          <div className="flex-shrink-0">
             {getStatusIcon(todo.status)}
           </div>
           
           <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-2 mb-2">
-              <p className={`text-sm font-medium ${todo.status === 'completed' ? 'line-through text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-gray-100'}`}>
-                {todo.content}
-              </p>
-              
-              <div className="flex gap-1 flex-shrink-0">
-                <Badge
-                  variant="outline"
-                  className={`text-xs px-2 py-0.5 ${getPriorityColor(todo.priority)}`}
-                >
-                  {todo.priority}
-                </Badge>
-                <Badge
-                  variant="outline"
-                  className={`text-xs px-2 py-0.5 ${getStatusColor(todo.status)}`}
-                >
-                  {todo.status.replace('_', ' ')}
-                </Badge>
-              </div>
-            </div>
+            <p className={`truncate ${todo.status === 'completed' ? 'line-through text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-gray-100'}`}>
+              {todo.content}
+            </p>
+          </div>
+          
+          <div className="flex gap-1 flex-shrink-0">
+            {todo.priority && (
+              <Badge
+                variant="outline"
+                className={`text-[9px] px-1 py-0 ${getPriorityColor(todo.priority)}`}
+              >
+                {todo.priority}
+              </Badge>
+            )}
+            <Badge
+              variant="outline"
+              className={`text-[9px] px-1 py-0 ${getStatusColor(todo.status)}`}
+            >
+              {todo.status.replace('_', ' ')}
+            </Badge>
           </div>
         </div>
       ))}
