@@ -1,16 +1,32 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, Loader2, Brain } from 'lucide-react';
-import { transcribeWithWhisper } from '../utils/whisper';
+import { Mic, Loader2, Brain, Settings } from 'lucide-react';
+import { transcribeWithWhisper, getWhisperLanguages } from '../utils/whisper';
 
 export function MicButton({ onTranscript, className = '' }) {
   const [state, setState] = useState('idle'); // idle, recording, transcribing, processing
   const [error, setError] = useState(null);
   const [isSupported, setIsSupported] = useState(true);
+  const [showSettings, setShowSettings] = useState(false);
+  const [selectedLanguage, setSelectedLanguage] = useState(() => 
+    localStorage.getItem('whisperLanguage') || 'auto'
+  );
+  const [useLocalWhisper, setUseLocalWhisper] = useState(() =>
+    localStorage.getItem('useLocalWhisper') === 'true'
+  );
   
   const mediaRecorderRef = useRef(null);
   const streamRef = useRef(null);
   const chunksRef = useRef([]);
   const lastTapRef = useRef(0);
+  
+  // Save settings to localStorage
+  useEffect(() => {
+    localStorage.setItem('whisperLanguage', selectedLanguage);
+  }, [selectedLanguage]);
+  
+  useEffect(() => {
+    localStorage.setItem('useLocalWhisper', useLocalWhisper.toString());
+  }, [useLocalWhisper]);
   
   // Check microphone support on mount
   useEffect(() => {
@@ -225,7 +241,7 @@ export function MicButton({ onTranscript, className = '' }) {
   const { icon, className: buttonClass, disabled } = getButtonAppearance();
 
   return (
-    <div className="relative">
+    <div className="relative flex items-center gap-2">
       <button
         type="button"
         style={{
@@ -252,6 +268,16 @@ export function MicButton({ onTranscript, className = '' }) {
         {icon}
       </button>
       
+      {/* Settings Button */}
+      <button
+        type="button"
+        onClick={() => setShowSettings(!showSettings)}
+        className="w-8 h-8 rounded-full bg-gray-600 hover:bg-gray-500 flex items-center justify-center text-white transition-colors"
+        title="Whisper设置"
+      >
+        <Settings className="w-4 h-4" />
+      </button>
+      
       {error && (
         <div className="absolute top-full mt-2 left-1/2 transform -translate-x-1/2 
                         bg-red-500 text-white text-xs px-2 py-1 rounded whitespace-nowrap z-10
@@ -266,6 +292,60 @@ export function MicButton({ onTranscript, className = '' }) {
       
       {state === 'processing' && (
         <div className="absolute -inset-1 rounded-full border-2 border-purple-500 animate-ping pointer-events-none" />
+      )}
+      
+      {/* Settings Panel */}
+      {showSettings && (
+        <div className="absolute bottom-full mb-2 right-0 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg shadow-lg p-4 w-64 z-20">
+          <div className="space-y-3">
+            <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">Whisper设置</h3>
+            
+            {/* Language Selection */}
+            <div>
+              <label className="block text-xs text-gray-700 dark:text-gray-300 mb-1">
+                语言
+              </label>
+              <select
+                value={selectedLanguage}
+                onChange={(e) => setSelectedLanguage(e.target.value)}
+                className="w-full text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-gray-900 dark:text-gray-100"
+              >
+                {getWhisperLanguages().map((lang) => (
+                  <option key={lang.code} value={lang.code}>
+                    {lang.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            {/* Local Whisper Toggle */}
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="useLocalWhisper"
+                checked={useLocalWhisper}
+                onChange={(e) => setUseLocalWhisper(e.target.checked)}
+                className="w-4 h-4"
+              />
+              <label htmlFor="useLocalWhisper" className="text-xs text-gray-700 dark:text-gray-300">
+                使用本地Whisper
+              </label>
+            </div>
+            
+            {useLocalWhisper && (
+              <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 p-2 rounded">
+                请确保本地Whisper服务已启动
+              </div>
+            )}
+            
+            <button
+              onClick={() => setShowSettings(false)}
+              className="w-full text-xs bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 rounded transition-colors"
+            >
+              确定
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
