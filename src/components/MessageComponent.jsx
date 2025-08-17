@@ -38,7 +38,7 @@ export const MessageComponent = memo(({ message, index, prevMessage, createDiff,
       }
     };
   }, [autoExpandTools, isExpanded, message.isToolUse]);
-
+  console.log(message)
   return (
     <div
       ref={messageRef}
@@ -467,32 +467,32 @@ export const MessageComponent = memo(({ message, index, prevMessage, createDiff,
                 {message.toolResult && (
                   <div className="mt-3 border-t border-blue-200 dark:border-blue-700 pt-3">
                     <div className="flex items-center gap-2 mb-2">
-                      <div className={`w-4 h-4 rounded flex items-center justify-center ${message.toolResult.isError
+                      <div className={`w-4 h-4 rounded flex items-center justify-center ${message.isError
                         ? 'bg-red-500'
                         : 'bg-green-500'
                         }`}>
                         <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          {message.toolResult.isError ? (
+                          {message.isError ? (
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                           ) : (
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                           )}
                         </svg>
                       </div>
-                      <span className={`text-sm font-medium ${message.toolResult.isError
+                      <span className={`text-sm font-medium ${message.isError
                         ? 'text-red-700 dark:text-red-300'
                         : 'text-green-700 dark:text-green-300'
                         }`}>
-                        {message.toolResult.isError ? 'Tool Error' : 'Tool Result'}
+                        {message.isError ? 'Tool Error' : 'Tool Result'}
                       </span>
                     </div>
 
-                    <div className={`text-sm ${message.toolResult.isError
+                    <div className={`text-sm ${message.isError
                       ? 'text-red-800 dark:text-red-200'
                       : 'text-green-800 dark:text-green-200'
                       }`}>
                       {(() => {
-                        const content = String(message.toolResult.content || '');
+                        const content = String(message.toolResult || '');
 
                         // Special handling for TodoWrite/TodoRead results
                         if ((message.toolName === 'TodoWrite' || message.toolName === 'TodoRead') &&

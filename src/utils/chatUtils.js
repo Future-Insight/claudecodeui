@@ -31,7 +31,7 @@ export function formatUsageLimitText(text) {
       const tzHuman = city ? `${gmt} (${city})` : gmt;
 
       // Readable date like "8 Jun 2025"
-      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       const dateReadable = `${reset.getDate()} ${months[reset.getMonth()]} ${reset.getFullYear()}`;
 
       return `Claude usage limit reached. Your limit will reset at **${timeStr} ${tzHuman}** - ${dateReadable}`;
@@ -59,7 +59,7 @@ export const safeLocalStorage = {
           console.warn('Could not parse chat messages for truncation:', parseError);
         }
       }
-      
+
       localStorage.setItem(key, value);
     } catch (error) {
       if (error.name === 'QuotaExceededError') {
@@ -67,7 +67,7 @@ export const safeLocalStorage = {
         // Clear old chat messages to free up space
         const keys = Object.keys(localStorage);
         const chatKeys = keys.filter(k => k.startsWith('chat_messages_')).sort();
-        
+
         // Remove oldest chat sessions first
         for (let i = 0; i < Math.min(5, chatKeys.length); i++) {
           try {
@@ -77,7 +77,7 @@ export const safeLocalStorage = {
             console.warn('Error removing old chat session:', removeError);
           }
         }
-        
+
         // Try setting the item again
         try {
           localStorage.setItem(key, value);
@@ -89,7 +89,7 @@ export const safeLocalStorage = {
       }
     }
   },
-  
+
   getItem: (key) => {
     try {
       return localStorage.getItem(key);
@@ -98,7 +98,7 @@ export const safeLocalStorage = {
       return null;
     }
   },
-  
+
   removeItem: (key) => {
     try {
       localStorage.removeItem(key);
@@ -111,19 +111,19 @@ export const safeLocalStorage = {
 // Calculate diff between original and new content
 export function calculateDiff(original, modified) {
   if (!original || !modified) return { additions: 0, deletions: 0 };
-  
+
   const originalLines = original.split('\n');
   const modifiedLines = modified.split('\n');
-  
+
   // Simple line-based diff calculation
   const maxLength = Math.max(originalLines.length, modifiedLines.length);
   let additions = 0;
   let deletions = 0;
-  
+
   for (let i = 0; i < maxLength; i++) {
     const origLine = originalLines[i] || '';
     const modLine = modifiedLines[i] || '';
-    
+
     if (i >= originalLines.length) {
       additions++;
     } else if (i >= modifiedLines.length) {
@@ -140,18 +140,18 @@ export function calculateDiff(original, modified) {
       }
     }
   }
-  
+
   return { additions, deletions };
 }
 
 // Flatten file tree for display
 export function flattenFileTree(tree, prefix = '', result = []) {
   if (!tree || typeof tree !== 'object') return result;
-  
+
   Object.keys(tree).sort().forEach(key => {
     const value = tree[key];
     const fullPath = prefix ? `${prefix}/${key}` : key;
-    
+
     if (value && typeof value === 'object' && !Array.isArray(value)) {
       // Directory
       result.push({ type: 'directory', path: fullPath, name: key });
@@ -161,43 +161,101 @@ export function flattenFileTree(tree, prefix = '', result = []) {
       result.push({ type: 'file', path: fullPath, name: key });
     }
   });
-  
+
   return result;
 }
 
-// Convert session messages for storage
-export function convertSessionMessages(messages) {
-  if (!Array.isArray(messages)) return [];
-  
-  console.log('convertSessionMessages input:', messages);
-  
-  const result = messages.map((msg, index) => {
-    if (!msg || typeof msg !== 'object') return msg;
-    
-    console.log(`convertSessionMessages[${index}] original:`, msg);
-    
-    // Instead of changing the structure, just ensure we have the right fields
-    const converted = {
-      type: msg.type || msg.role || 'user',  
-      content: msg.content,  // Keep original content as-is for now
-      timestamp: msg.timestamp || Date.now()
-    };
-    
-    console.log(`convertSessionMessages[${index}] converted:`, converted);
-    
-    // Preserve attachments if they exist
-    if (msg.attachments) {
-      converted.attachments = msg.attachments;
+export const convertSessionMessages = (rawMessages) => {
+  const converted = [];
+  const toolResults = new Map(); // Map tool_use_id to tool result
+
+  // First pass: collect all tool results
+  for (const msg of rawMessages) {
+    if (msg.message?.role === 'user' && Array.isArray(msg.message?.content)) {
+      for (const part of msg.message.content) {
+        if (part.type === 'tool_result') {
+          toolResults.set(part.tool_use_id, {
+            content: part.content,
+            isError: part.is_error,
+            timestamp: new Date(msg.timestamp || Date.now())
+          });
+        }
+      }
     }
-    
-    // Preserve tool calls if they exist
-    if (msg.tool_calls) {
-      converted.tool_calls = msg.tool_calls;
+  }
+
+  // Second pass: process messages and attach tool results to tool uses
+  for (const msg of rawMessages) {
+    // Handle user messages
+    if (msg.message?.role === 'user' && msg.message?.content) {
+      let content = '';
+      let messageType = 'user';
+
+      if (Array.isArray(msg.message.content)) {
+        // Handle array content, but skip tool results (they're attached to tool uses)
+        const textParts = [];
+
+        for (const part of msg.message.content) {
+          if (part.type === 'text') {
+            textParts.push(part.text);
+          }
+          // Skip tool_result parts - they're handled in the first pass
+        }
+
+        content = textParts.join('\n');
+      } else if (typeof msg.message.content === 'string') {
+        content = msg.message.content;
+      } else {
+        content = String(msg.message.content);
+      }
+
+      // Skip command messages and empty content
+      if (content && !content.startsWith('<command-name>') && !content.startsWith('[Request interrupted')) {
+        converted.push({
+          type: messageType,
+          content: content,
+          timestamp: msg.timestamp || new Date().toISOString()
+        });
+      }
     }
-    
-    return converted;
-  });
-  
-  console.log('convertSessionMessages output:', result);
-  return result;
-}
+
+    // Handle assistant messages
+    else if (msg.message?.role === 'assistant' && msg.message?.content) {
+      if (Array.isArray(msg.message.content)) {
+        for (const part of msg.message.content) {
+          if (part.type === 'text') {
+            converted.push({
+              type: 'assistant',
+              content: part.text,
+              timestamp: msg.timestamp || new Date().toISOString()
+            });
+          } else if (part.type === 'tool_use') {
+            // Get the corresponding tool result
+            const toolResult = toolResults.get(part.id);
+
+            converted.push({
+              type: 'assistant',
+              content: '',
+              timestamp: msg.timestamp || new Date().toISOString(),
+              isToolUse: true,
+              toolName: part.name,
+              toolInput: JSON.stringify(part.input),
+              toolResult: toolResult ? (typeof toolResult.content === 'string' ? toolResult.content : JSON.stringify(toolResult.content)) : null,
+              toolError: toolResult?.isError || false,
+              isError: toolResult?.isError || false,
+              toolResultTimestamp: toolResult?.timestamp || new Date()
+            });
+          }
+        }
+      } else if (typeof msg.message.content === 'string') {
+        converted.push({
+          type: 'assistant',
+          content: msg.message.content,
+          timestamp: msg.timestamp || new Date().toISOString()
+        });
+      }
+    }
+  }
+
+  return converted;
+};
