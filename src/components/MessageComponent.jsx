@@ -911,13 +911,20 @@ export const MessageComponent = memo(({ message, index, prevMessage, createDiff,
                               {children}
                             </strong>
                           ) : (
-                            <div className="bg-gray-100 dark:bg-gray-800 p-3 rounded-lg overflow-hidden my-2">
+                            <div className="bg-gray-100 dark:bg-gray-800 p-2 rounded-lg overflow-hidden my-2">
                               <code className="text-gray-800 dark:text-gray-200 text-sm font-mono block whitespace-pre-wrap break-words" {...props}>
                                 {children}
                               </code>
                             </div>
                           );
                         },
+                        pre: ({ children }) => (
+                          <div className="bg-gray-100 dark:bg-gray-800 p-2 rounded-lg overflow-hidden my-2">
+                            <code className="text-gray-800 dark:text-gray-200 text-sm font-mono block whitespace-pre-wrap break-words">
+                              {children}
+                            </code>
+                          </div>
+                        ),
                         blockquote: ({ children }) => (
                           <blockquote className="border-l-4 border-gray-300 dark:border-gray-600 pl-4 italic text-gray-600 dark:text-gray-400 my-2">
                             {children}
