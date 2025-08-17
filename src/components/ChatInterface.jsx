@@ -20,7 +20,6 @@ import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from '
 import { useDropzone } from 'react-dropzone';
 import TodoList from './TodoList';
 import ClaudeLogo from './ClaudeLogo.jsx';
-import CursorLogo from './CursorLogo.jsx';
 import ClaudeStatus from './ClaudeStatus';
 import { MicButton } from './MicButton.jsx';
 import { api, authenticatedFetch } from '../utils/api';
@@ -87,9 +86,6 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
   const [provider, setProvider] = useState(() => {
     return localStorage.getItem('selected-provider') || 'claude';
   });
-  const [cursorModel, setCursorModel] = useState(() => {
-    return localStorage.getItem('cursor-model') || 'gpt-5';
-  });
   // When selecting a session from Sidebar, auto-switch provider to match session's origin
   useEffect(() => {
     if (selectedSession && selectedSession.__provider && selectedSession.__provider !== provider) {
@@ -97,35 +93,6 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
       localStorage.setItem('selected-provider', selectedSession.__provider);
     }
   }, [selectedSession]);
-
-  // Load Cursor default model from config
-  useEffect(() => {
-    if (provider === 'cursor') {
-      fetch('/api/cursor/config', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth-token')}`
-        }
-      })
-        .then(res => res.json())
-        .then(data => {
-          if (data.success && data.config?.model?.modelId) {
-            // Map Cursor model IDs to our simplified names
-            const modelMap = {
-              'gpt-5': 'gpt-5',
-              'claude-4-sonnet': 'sonnet-4',
-              'sonnet-4': 'sonnet-4',
-              'claude-4-opus': 'opus-4.1',
-              'opus-4.1': 'opus-4.1'
-            };
-            const mappedModel = modelMap[data.config.model.modelId] || data.config.model.modelId;
-            if (!localStorage.getItem('cursor-model')) {
-              setCursorModel(mappedModel);
-            }
-          }
-        })
-        .catch(err => console.error('Error loading Cursor config:', err));
-    }
-  }, [provider]);
 
 
   // Memoized diff calculation to prevent recalculating on every render
@@ -149,6 +116,12 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
 
   // Load session messages from API with pagination
   const loadSessionMessages = useCallback(async (projectName, sessionId, loadMore = false) => {
+    console.log('📂 [ChatInterface] Loading session messages:', {
+      projectName,
+      sessionId,
+      loadMore,
+      currentOffset: loadMore ? messagesOffset : 0
+    });
     if (!projectName || !sessionId) return [];
 
     const isInitialLoad = !loadMore;
@@ -166,15 +139,62 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
       }
       const data = await response.json();
 
+      console.log('📈 [ChatInterface] Session messages API response:', {
+        hasMore: data.hasMore,
+        messagesCount: data.messages?.length || 0,
+        total: data.total,
+        offset: currentOffset
+      });
+
+      // Normalize messages to ensure content is a string
+      const normalizeMessage = (msg) => {
+        if (!msg || typeof msg !== 'object') return msg;
+
+        let content = '';
+        if (typeof msg.content === 'string') {
+          content = msg.content;
+        } else if (typeof msg.content === 'object' && msg.content) {
+          // Extract text from content object
+          if (Array.isArray(msg.content)) {
+            // Handle array content
+            content = msg.content
+              .filter(part => typeof part === 'string' || (part && (part.text || part.content)))
+              .map(part => {
+                if (typeof part === 'string') return part;
+                return part.text || part.content || '';
+              })
+              .join('\n');
+          } else {
+            // Handle object content
+            content = msg.content.content || msg.content.text || msg.content.message || '';
+          }
+        }
+
+        return {
+          ...msg,
+          type: msg.type || msg.role || 'user',
+          content: content
+        };
+      };
+
       // Handle paginated response
       if (data.hasMore !== undefined) {
+        const normalizedMessages = (data.messages || []).map(normalizeMessage);
+        console.log('📄 [ChatInterface] Returning paginated messages:', {
+          count: normalizedMessages.length,
+          hasMore: data.hasMore,
+          total: data.total
+        });
         setHasMoreMessages(data.hasMore);
         setTotalMessages(data.total);
         setMessagesOffset(currentOffset + (data.messages?.length || 0));
-        return data.messages || [];
+        return normalizedMessages;
       } else {
         // Backward compatibility for non-paginated response
-        const messages = data.messages || [];
+        const messages = (data.messages || []).map(normalizeMessage);
+        console.log('📄 [ChatInterface] Returning non-paginated messages:', {
+          count: messages.length
+        });
         setHasMoreMessages(false);
         setTotalMessages(messages.length);
         return messages;
@@ -192,315 +212,6 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
   }, [messagesOffset]);
 
   // Load Cursor session messages from SQLite via backend
-  const loadCursorSessionMessages = useCallback(async (projectPath, sessionId) => {
-    if (!projectPath || !sessionId) return [];
-    setIsLoadingSessionMessages(true);
-    try {
-      const url = `/api/cursor/sessions/${encodeURIComponent(sessionId)}?projectPath=${encodeURIComponent(projectPath)}`;
-      const res = await authenticatedFetch(url);
-      if (!res.ok) return [];
-      const data = await res.json();
-      const blobs = data?.session?.messages || [];
-      const converted = [];
-      const toolUseMap = {}; // Map to store tool uses by ID for linking results
-
-      // First pass: process all messages maintaining order
-      for (let blobIdx = 0; blobIdx < blobs.length; blobIdx++) {
-        const blob = blobs[blobIdx];
-        const content = blob.content;
-        let text = '';
-        let role = 'assistant';
-        let reasoningText = null; // Move to outer scope
-        try {
-          // Handle different Cursor message formats
-          if (content?.role && content?.content) {
-            // Direct format: {"role":"user","content":[{"type":"text","text":"..."}]}
-            // Skip system messages
-            if (content.role === 'system') {
-              continue;
-            }
-
-            // Handle tool messages
-            if (content.role === 'tool') {
-              // Tool result format - find the matching tool use message and update it
-              if (Array.isArray(content.content)) {
-                for (const item of content.content) {
-                  if (item?.type === 'tool-result') {
-                    // Map ApplyPatch to Edit for consistency
-                    let toolName = item.toolName || 'Unknown Tool';
-                    if (toolName === 'ApplyPatch') {
-                      toolName = 'Edit';
-                    }
-                    const toolCallId = item.toolCallId || content.id;
-                    const result = item.result || '';
-
-                    // Store the tool result to be linked later
-                    if (toolUseMap[toolCallId]) {
-                      toolUseMap[toolCallId].toolResult = {
-                        content: result,
-                        isError: false
-                      };
-                    } else {
-                      // No matching tool use found, create a standalone result message
-                      converted.push({
-                        type: 'assistant',
-                        content: '',
-                        timestamp: new Date(Date.now() + blobIdx * 1000),
-                        blobId: blob.id,
-                        sequence: blob.sequence,
-                        rowid: blob.rowid,
-                        isToolUse: true,
-                        toolName: toolName,
-                        toolId: toolCallId,
-                        toolInput: null,
-                        toolResult: {
-                          content: result,
-                          isError: false
-                        }
-                      });
-                    }
-                  }
-                }
-              }
-              continue; // Don't add tool messages as regular messages
-            } else {
-              // User or assistant messages
-              role = content.role === 'user' ? 'user' : 'assistant';
-
-              if (Array.isArray(content.content)) {
-                // Extract text, reasoning, and tool calls from content array
-                const textParts = [];
-
-                for (const part of content.content) {
-                  if (part?.type === 'text' && part?.text) {
-                    textParts.push(part.text);
-                  } else if (part?.type === 'reasoning' && part?.text) {
-                    // Handle reasoning type - will be displayed in a collapsible section
-                    reasoningText = part.text;
-                  } else if (part?.type === 'tool-call') {
-                    // First, add any text/reasoning we've collected so far as a message
-                    if (textParts.length > 0 || reasoningText) {
-                      converted.push({
-                        type: role,
-                        content: textParts.join('\n'),
-                        reasoning: reasoningText,
-                        timestamp: new Date(Date.now() + blobIdx * 1000),
-                        blobId: blob.id,
-                        sequence: blob.sequence,
-                        rowid: blob.rowid
-                      });
-                      textParts.length = 0;
-                      reasoningText = null;
-                    }
-
-                    // Tool call in assistant message - format like Claude Code
-                    // Map ApplyPatch to Edit for consistency with Claude Code
-                    let toolName = part.toolName || 'Unknown Tool';
-                    if (toolName === 'ApplyPatch') {
-                      toolName = 'Edit';
-                    }
-                    const toolId = part.toolCallId || `tool_${blobIdx}`;
-
-                    // Create a tool use message with Claude Code format
-                    // Map Cursor args format to Claude Code format
-                    let toolInput = part.args;
-
-                    if (toolName === 'Edit' && part.args) {
-                      // ApplyPatch uses 'patch' format, convert to Edit format
-                      if (part.args.patch) {
-                        // Parse the patch to extract old and new content
-                        const patchLines = part.args.patch.split('\n');
-                        let oldLines = [];
-                        let newLines = [];
-                        let inPatch = false;
-
-                        for (const line of patchLines) {
-                          if (line.startsWith('@@')) {
-                            inPatch = true;
-                          } else if (inPatch) {
-                            if (line.startsWith('-')) {
-                              oldLines.push(line.substring(1));
-                            } else if (line.startsWith('+')) {
-                              newLines.push(line.substring(1));
-                            } else if (line.startsWith(' ')) {
-                              // Context line - add to both
-                              oldLines.push(line.substring(1));
-                              newLines.push(line.substring(1));
-                            }
-                          }
-                        }
-
-                        const filePath = part.args.file_path;
-                        const absolutePath = filePath && !filePath.startsWith('/')
-                          ? `${projectPath}/${filePath}`
-                          : filePath;
-                        toolInput = {
-                          file_path: absolutePath,
-                          old_string: oldLines.join('\n') || part.args.patch,
-                          new_string: newLines.join('\n') || part.args.patch
-                        };
-                      } else {
-                        // Direct edit format
-                        toolInput = part.args;
-                      }
-                    } else if (toolName === 'Read' && part.args) {
-                      // Map 'path' to 'file_path'
-                      // Convert relative path to absolute if needed
-                      const filePath = part.args.path || part.args.file_path;
-                      const absolutePath = filePath && !filePath.startsWith('/')
-                        ? `${projectPath}/${filePath}`
-                        : filePath;
-                      toolInput = {
-                        file_path: absolutePath
-                      };
-                    } else if (toolName === 'Write' && part.args) {
-                      // Map fields for Write tool
-                      const filePath = part.args.path || part.args.file_path;
-                      const absolutePath = filePath && !filePath.startsWith('/')
-                        ? `${projectPath}/${filePath}`
-                        : filePath;
-                      toolInput = {
-                        file_path: absolutePath,
-                        content: part.args.contents || part.args.content
-                      };
-                    }
-
-                    const toolMessage = {
-                      type: 'assistant',
-                      content: '',
-                      timestamp: new Date(Date.now() + blobIdx * 1000),
-                      blobId: blob.id,
-                      sequence: blob.sequence,
-                      rowid: blob.rowid,
-                      isToolUse: true,
-                      toolName: toolName,
-                      toolId: toolId,
-                      toolInput: toolInput ? JSON.stringify(toolInput) : null,
-                      toolResult: null // Will be filled when we get the tool result
-                    };
-                    converted.push(toolMessage);
-                    toolUseMap[toolId] = toolMessage; // Store for linking results
-                  } else if (part?.type === 'tool_use') {
-                    // Old format support
-                    if (textParts.length > 0 || reasoningText) {
-                      converted.push({
-                        type: role,
-                        content: textParts.join('\n'),
-                        reasoning: reasoningText,
-                        timestamp: new Date(Date.now() + blobIdx * 1000),
-                        blobId: blob.id,
-                        sequence: blob.sequence,
-                        rowid: blob.rowid
-                      });
-                      textParts.length = 0;
-                      reasoningText = null;
-                    }
-
-                    const toolName = part.name || 'Unknown Tool';
-                    const toolId = part.id || `tool_${blobIdx}`;
-
-                    const toolMessage = {
-                      type: 'assistant',
-                      content: '',
-                      timestamp: new Date(Date.now() + blobIdx * 1000),
-                      blobId: blob.id,
-                      sequence: blob.sequence,
-                      rowid: blob.rowid,
-                      isToolUse: true,
-                      toolName: toolName,
-                      toolId: toolId,
-                      toolInput: part.input ? JSON.stringify(part.input) : null,
-                      toolResult: null
-                    };
-                    converted.push(toolMessage);
-                    toolUseMap[toolId] = toolMessage;
-                  } else if (typeof part === 'string') {
-                    textParts.push(part);
-                  }
-                }
-
-                // Add any remaining text/reasoning
-                if (textParts.length > 0) {
-                  text = textParts.join('\n');
-                  if (reasoningText && !text) {
-                    // Just reasoning, no text
-                    converted.push({
-                      type: role,
-                      content: '',
-                      reasoning: reasoningText,
-                      timestamp: new Date(Date.now() + blobIdx * 1000),
-                      blobId: blob.id,
-                      sequence: blob.sequence,
-                      rowid: blob.rowid
-                    });
-                    text = ''; // Clear to avoid duplicate
-                  }
-                } else {
-                  text = '';
-                }
-              } else if (typeof content.content === 'string') {
-                text = content.content;
-              }
-            }
-          } else if (content?.message?.role && content?.message?.content) {
-            // Nested message format
-            if (content.message.role === 'system') {
-              continue;
-            }
-            role = content.message.role === 'user' ? 'user' : 'assistant';
-            if (Array.isArray(content.message.content)) {
-              text = content.message.content
-                .map(p => (typeof p === 'string' ? p : (p?.text || '')))
-                .filter(Boolean)
-                .join('\n');
-            } else if (typeof content.message.content === 'string') {
-              text = content.message.content;
-            }
-          }
-        } catch (e) {
-          console.log('Error parsing blob content:', e);
-        }
-        if (text && text.trim()) {
-          const message = {
-            type: role,
-            content: text,
-            timestamp: new Date(Date.now() + blobIdx * 1000),
-            blobId: blob.id,
-            sequence: blob.sequence,
-            rowid: blob.rowid
-          };
-
-          // Add reasoning if we have it
-          if (reasoningText) {
-            message.reasoning = reasoningText;
-          }
-
-          converted.push(message);
-        }
-      }
-
-      // Sort messages by sequence/rowid to maintain chronological order
-      converted.sort((a, b) => {
-        // First sort by sequence if available (clean 1,2,3... numbering)
-        if (a.sequence !== undefined && b.sequence !== undefined) {
-          return a.sequence - b.sequence;
-        }
-        // Then try rowid (original SQLite row IDs)
-        if (a.rowid !== undefined && b.rowid !== undefined) {
-          return a.rowid - b.rowid;
-        }
-        // Fallback to timestamp
-        return new Date(a.timestamp) - new Date(b.timestamp);
-      });
-
-      return converted;
-    } catch (e) {
-      console.error('Error loading Cursor session messages:', e);
-      return [];
-    } finally {
-      setIsLoadingSessionMessages(false);
-    }
-  }, []);
 
 
 
@@ -537,7 +248,7 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
       const scrolledNearTop = container.scrollTop < 100;
       const provider = localStorage.getItem('selected-provider') || 'claude';
 
-      if (scrolledNearTop && hasMoreMessages && !isLoadingMoreMessages && selectedSession && selectedProject && provider !== 'cursor') {
+      if (scrolledNearTop && hasMoreMessages && !isLoadingMoreMessages && selectedSession && selectedProject) {
         // Save current scroll position
         const previousScrollHeight = container.scrollHeight;
         const previousScrollTop = container.scrollTop;
@@ -565,32 +276,27 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
   useEffect(() => {
     // Load session messages when session changes
     const loadMessages = async () => {
+      console.log('🔄 [ChatInterface] Session change detected:', {
+        hasSelectedSession: !!selectedSession,
+        sessionId: selectedSession?.id,
+        hasProject: !!selectedProject,
+        projectName: selectedProject?.name,
+        isSystemChange: isSystemSessionChange
+      });
       if (selectedSession && selectedProject) {
         const provider = localStorage.getItem('selected-provider') || 'claude';
+        console.log('🎨 [ChatInterface] Loading messages for provider:', provider);
 
         // Reset pagination state when switching sessions
         setMessagesOffset(0);
         setHasMoreMessages(false);
         setTotalMessages(0);
 
-        if (provider === 'cursor') {
-          // For Cursor, set the session ID for resuming
-          setCurrentSessionId(selectedSession.id);
-          sessionStorage.setItem('cursorSessionId', selectedSession.id);
-
-          // Only load messages from SQLite if this is NOT a system-initiated session change
-          // For system-initiated changes, preserve existing messages
-          if (!isSystemSessionChange) {
-            // Load historical messages for Cursor session from SQLite
-            const projectPath = selectedProject.fullPath || selectedProject.path;
-            const converted = await loadCursorSessionMessages(projectPath, selectedSession.id);
-            setSessionMessages([]);
-            setChatMessages(converted);
-          } else {
-            // Reset the flag after handling system session change
-            setIsSystemSessionChange(false);
-          }
-        } else {
+        {
+          console.log('🔵 [ChatInterface] Claude session setup:', {
+            sessionId: selectedSession.id,
+            projectName: selectedProject.name
+          });
           // For Claude, load messages normally with pagination
           setCurrentSessionId(selectedSession.id);
 
@@ -625,7 +331,7 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
     };
 
     loadMessages();
-  }, [selectedSession, selectedProject, loadCursorSessionMessages, scrollToBottom, isSystemSessionChange]);
+  }, [selectedSession, selectedProject, scrollToBottom, isSystemSessionChange]);
 
   // Update chatMessages when convertedMessages changes
   useEffect(() => {
@@ -673,18 +379,32 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
     // Handle WebSocket messages
     if (messages.length > 0) {
       const latestMessage = messages[messages.length - 1];
+      console.log('📨 [ChatInterface] Processing WebSocket message:', {
+        type: latestMessage.type,
+        messageCount: messages.length,
+        currentSessionId,
+        selectedSessionId: selectedSession?.id,
+        timestamp: new Date().toISOString()
+      });
 
       switch (latestMessage.type) {
         case 'session-created':
+          console.log('🎯 [ChatInterface] Session created:', {
+            sessionId: latestMessage.sessionId,
+            currentSessionId,
+            hasPendingId: !!sessionStorage.getItem('pendingSessionId')
+          });
           // New session created by Claude CLI - we receive the real session ID here
           // Store it temporarily until conversation completes (prevents premature session association)
           if (latestMessage.sessionId && !currentSessionId) {
             sessionStorage.setItem('pendingSessionId', latestMessage.sessionId);
+            console.log('💾 [ChatInterface] Stored pending session ID:', latestMessage.sessionId);
 
             // Session Protection: Replace temporary "new-session-*" identifier with real session ID
             // This maintains protection continuity - no gap between temp ID and real ID
             // The temporary session is removed and real session is marked as active
             if (onReplaceTemporarySession) {
+              console.log('🔄 [ChatInterface] Replacing temporary session');
               onReplaceTemporarySession(latestMessage.sessionId);
             }
           }
@@ -692,6 +412,12 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
 
         case 'claude-response':
           const messageData = latestMessage.data.message || latestMessage.data;
+          console.log('🤖 [ChatInterface] Claude response received:', {
+            hasMessage: !!messageData,
+            messageType: messageData?.type,
+            contentType: Array.isArray(messageData?.content) ? 'array' : typeof messageData?.content,
+            contentLength: messageData?.content?.length || 0
+          });
 
           // Handle Cursor streaming format (content_block_delta / content_block_stop)
           if (messageData && typeof messageData === 'object' && messageData.type) {
@@ -708,9 +434,20 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
                     const updated = [...prev];
                     const last = updated[updated.length - 1];
                     if (last && last.type === 'assistant' && !last.isToolUse && last.isStreaming) {
+                      const oldLength = last.content?.length || 0;
                       last.content = (last.content || '') + chunk;
+                      console.log('🔄 [ChatInterface] Streaming update (append):', {
+                        chunkLength: chunk.length,
+                        oldContentLength: oldLength,
+                        newContentLength: last.content.length
+                      });
                     } else {
-                      updated.push({ type: 'assistant', content: chunk, timestamp: new Date(), isStreaming: true });
+                      const newMessage = { type: 'assistant', content: chunk, timestamp: new Date(), isStreaming: true };
+                      updated.push(newMessage);
+                      console.log('🆕 [ChatInterface] Streaming update (new message):', {
+                        chunkLength: chunk.length,
+                        totalMessages: updated.length
+                      });
                     }
                     return updated;
                   });
@@ -760,17 +497,20 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
             currentSessionId &&
             latestMessage.data.session_id !== currentSessionId) {
 
-            console.log('🔄 Claude CLI session duplication detected:', {
+            console.log('🔄 [ChatInterface] Claude CLI session duplication detected:', {
               originalSession: currentSessionId,
-              newSession: latestMessage.data.session_id
+              newSession: latestMessage.data.session_id,
+              timestamp: new Date().toISOString()
             });
 
             // Mark this as a system-initiated session change to preserve messages
             setIsSystemSessionChange(true);
+            console.log('🔒 [ChatInterface] Marked as system session change');
 
             // Switch to the new session using React Router navigation
             // This triggers the session loading logic in App.jsx without a page reload
             if (onNavigateToSession) {
+              console.log('🧭 [ChatInterface] Navigating to new session:', latestMessage.data.session_id);
               onNavigateToSession(latestMessage.data.session_id);
             }
             return; // Don't process the message further, let the navigation handle it
@@ -812,6 +552,12 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
               if (part.type === 'tool_use') {
                 // Add tool use message
                 const toolInput = part.input ? JSON.stringify(part.input, null, 2) : '';
+                console.log('🔧 [ChatInterface] Adding tool use message:', {
+                  toolName: part.name,
+                  toolId: part.id,
+                  hasInput: !!toolInput,
+                  inputLength: toolInput.length
+                });
                 setChatMessages(prev => [...prev, {
                   type: 'assistant',
                   content: '',
@@ -827,6 +573,10 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
                 let content = formatUsageLimitText(part.text);
 
                 // Add regular text message
+                console.log('💬 [ChatInterface] Adding assistant text message (array):', {
+                  contentLength: content.length,
+                  contentPreview: content.substring(0, 100) + (content.length > 100 ? '...' : '')
+                });
                 setChatMessages(prev => [...prev, {
                   type: 'assistant',
                   content: content,
@@ -839,6 +589,10 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
             let content = formatUsageLimitText(messageData.content);
 
             // Add regular text message
+            console.log('💬 [ChatInterface] Adding assistant message (string):', {
+              contentLength: content.length,
+              contentPreview: content.substring(0, 100) + (content.length > 100 ? '...' : '')
+            });
             setChatMessages(prev => [...prev, {
               type: 'assistant',
               content: content,
@@ -851,19 +605,31 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
             for (const part of messageData.content) {
               if (part.type === 'tool_result') {
                 // Find the corresponding tool use and update it with the result
-                setChatMessages(prev => prev.map(msg => {
-                  if (msg.isToolUse && msg.toolId === part.tool_use_id) {
-                    return {
-                      ...msg,
-                      toolResult: {
-                        content: part.content,
-                        isError: part.is_error,
-                        timestamp: new Date()
-                      }
-                    };
-                  }
-                  return msg;
-                }));
+                console.log('📊 [ChatInterface] Updating tool result:', {
+                  toolUseId: part.tool_use_id,
+                  isError: part.is_error,
+                  resultLength: part.content?.length || 0
+                });
+                setChatMessages(prev => {
+                  const updated = prev.map(msg => {
+                    if (msg.isToolUse && msg.toolId === part.tool_use_id) {
+                      console.log('🎯 [ChatInterface] Found matching tool use message, updating result');
+                      return {
+                        ...msg,
+                        toolResult: {
+                          content: part.content,
+                          isError: part.is_error,
+                          timestamp: new Date()
+                        }
+                      };
+                    }
+                    return msg;
+                  });
+                  console.log('🔄 [ChatInterface] Tool result update completed:', {
+                    totalMessages: updated.length
+                  });
+                  return updated;
+                });
               }
             }
           }
@@ -1208,6 +974,12 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
 
   // Show only recent messages for better performance
   const visibleMessages = useMemo(() => {
+    console.log('ChatInterface visibleMessages calculation:', {
+      chatMessagesLength: chatMessages.length,
+      visibleMessageCount,
+      chatMessages: chatMessages.slice(0, 3) // Show first 3 for debugging
+    });
+
     if (chatMessages.length <= visibleMessageCount) {
       return chatMessages;
     }
@@ -1227,11 +999,20 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
 
   useEffect(() => {
     // Auto-scroll to bottom when new messages arrive
+    console.log('🔄 [ChatInterface] Messages changed, checking scroll behavior:', {
+      messagesCount: chatMessages.length,
+      autoScrollToBottom,
+      isUserScrolledUp,
+      hasScrollContainer: !!scrollContainerRef.current
+    });
     if (scrollContainerRef.current && chatMessages.length > 0) {
       if (autoScrollToBottom) {
         // If auto-scroll is enabled, always scroll to bottom unless user has manually scrolled up
         if (!isUserScrolledUp) {
+          console.log('⬇️ [ChatInterface] Auto-scrolling to bottom');
           setTimeout(() => scrollToBottom(), 50); // Small delay to ensure DOM is updated
+        } else {
+          console.log('🚫 [ChatInterface] Skipping auto-scroll (user scrolled up)');
         }
       } else {
         // When auto-scroll is disabled, preserve the visual position
@@ -1252,6 +1033,9 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
   // Scroll to bottom when component mounts with existing messages or when messages first load
   useEffect(() => {
     if (scrollContainerRef.current && chatMessages.length > 0) {
+      console.log('🎆 [ChatInterface] Initial messages load, scrolling to bottom:', {
+        messagesCount: chatMessages.length
+      });
       // Always scroll to bottom when messages first load (user expects to see latest)
       // Also reset scroll state
       setIsUserScrolledUp(false);
@@ -1438,7 +1222,21 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
       timestamp: new Date()
     };
 
-    setChatMessages(prev => [...prev, userMessage]);
+    console.log('💬 [ChatInterface] Adding user message:', {
+      content: userMessage.content,
+      hasImages: !!userMessage.images?.length,
+      imageCount: userMessage.images?.length || 0,
+      timestamp: userMessage.timestamp
+    });
+    setChatMessages(prev => {
+      const newMessages = [...prev, userMessage];
+      console.log('📝 [ChatInterface] Chat messages updated:', {
+        previousCount: prev.length,
+        newCount: newMessages.length,
+        lastMessage: newMessages[newMessages.length - 1]
+      });
+      return newMessages;
+    });
     setIsLoading(true);
     setCanAbortSession(true);
     // Set a default status when starting
@@ -1495,7 +1293,6 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
           projectPath: selectedProject.fullPath || selectedProject.path,
           sessionId: effectiveSessionId,
           resume: !!effectiveSessionId,
-          model: cursorModel,
           skipPermissions: toolsSettings?.skipPermissions || false,
           toolsSettings: toolsSettings
         }
@@ -1656,12 +1453,6 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
 
 
 
-  const handleNewSession = () => {
-    setChatMessages([]);
-    setInput('');
-    setIsLoading(false);
-    setCanAbortSession(false);
-  };
 
   const handleAbortSession = () => {
     if (currentSessionId && canAbortSession) {
@@ -1768,7 +1559,7 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
                         }`}
                     >
                       <div className="flex flex-col items-center justify-center h-full gap-3">
-                        <CursorLogo className="w-10 h-10" />
+                        <ClaudeLogo className="w-10 h-10" />
                         <div>
                           <p className="font-semibold text-gray-900 dark:text-white">Cursor</p>
                           <p className="text-xs text-gray-500 dark:text-gray-400">AI Code Editor</p>
@@ -1786,33 +1577,10 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
                     </button>
                   </div>
 
-                  {/* Model Selection for Cursor - Always reserve space to prevent jumping */}
-                  <div className={`mb-6 transition-opacity duration-200 ${provider === 'cursor' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      {provider === 'cursor' ? 'Select Model' : '\u00A0'}
-                    </label>
-                    <select
-                      value={cursorModel}
-                      onChange={(e) => {
-                        const newModel = e.target.value;
-                        setCursorModel(newModel);
-                        localStorage.setItem('cursor-model', newModel);
-                      }}
-                      className="pl-4 pr-10 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 min-w-[140px]"
-                      disabled={provider !== 'cursor'}
-                    >
-                      <option value="gpt-5">GPT-5</option>
-                      <option value="sonnet-4">Sonnet-4</option>
-                      <option value="opus-4.1">Opus 4.1</option>
-                    </select>
-                  </div>
-
                   <p className="text-sm text-gray-500 dark:text-gray-400">
                     {provider === 'claude'
                       ? 'Ready to use Claude AI. Start typing your message below.'
-                      : provider === 'cursor'
-                        ? `Ready to use Cursor with ${cursorModel}. Start typing your message below.`
-                        : 'Select a provider above to begin'
+                      : 'Select a provider above to begin'
                     }
                   </p>
                 </div>
@@ -1866,6 +1634,15 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
               {visibleMessages.map((message, index) => {
                 const prevMessage = index > 0 ? visibleMessages[index - 1] : null;
 
+                // Debug: log original message from ChatInterface
+                console.log(`ChatInterface message ${index}:`, {
+                  message,
+                  hasContent: !!message.content,
+                  contentLength: message.content?.length,
+                  messageType: message.type,
+                  messageRole: message.role
+                });
+
                 return (
                   <MessageComponent
                     key={index}
@@ -1889,7 +1666,7 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
                 <div className="flex items-center space-x-3 mb-2">
                   <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm flex-shrink-0 p-1 bg-transparent">
                     {(localStorage.getItem('selected-provider') || 'claude') === 'cursor' ? (
-                      <CursorLogo className="w-full h-full" />
+                      <ClaudeLogo className="w-full h-full" />
                     ) : (
                       <ClaudeLogo className="w-full h-full" />
                     )}

@@ -169,14 +169,21 @@ export function flattenFileTree(tree, prefix = '', result = []) {
 export function convertSessionMessages(messages) {
   if (!Array.isArray(messages)) return [];
   
-  return messages.map(msg => {
+  console.log('convertSessionMessages input:', messages);
+  
+  const result = messages.map((msg, index) => {
     if (!msg || typeof msg !== 'object') return msg;
     
+    console.log(`convertSessionMessages[${index}] original:`, msg);
+    
+    // Instead of changing the structure, just ensure we have the right fields
     const converted = {
-      role: msg.role || 'user',
-      content: msg.content || '',
+      type: msg.type || msg.role || 'user',  
+      content: msg.content,  // Keep original content as-is for now
       timestamp: msg.timestamp || Date.now()
     };
+    
+    console.log(`convertSessionMessages[${index}] converted:`, converted);
     
     // Preserve attachments if they exist
     if (msg.attachments) {
@@ -190,4 +197,7 @@ export function convertSessionMessages(messages) {
     
     return converted;
   });
+  
+  console.log('convertSessionMessages output:', result);
+  return result;
 }

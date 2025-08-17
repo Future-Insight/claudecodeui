@@ -4,7 +4,6 @@ import TodoList from './TodoList';
 import { formatUsageLimitText } from '../utils/chatUtils';
 
 import ClaudeLogo from './ClaudeLogo';
-import CursorLogo from './CursorLogo';
 
 export const MessageComponent = memo(({ message, index, prevMessage, createDiff, onFileOpen, onShowSettings, autoExpandTools, showRawParameters }) => {
   const isGrouped = prevMessage && prevMessage.type === message.type &&
@@ -91,7 +90,7 @@ export const MessageComponent = memo(({ message, index, prevMessage, createDiff,
               ) : (
                 <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm flex-shrink-0 p-1">
                   {(localStorage.getItem('selected-provider') || 'claude') === 'cursor' ? (
-                    <CursorLogo className="w-full h-full" />
+                    <ClaudeLogo className="w-full h-full" />
                   ) : (
                     <ClaudeLogo className="w-full h-full" />
                   )}

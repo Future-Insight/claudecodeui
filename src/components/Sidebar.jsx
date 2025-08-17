@@ -7,7 +7,6 @@ import { Input } from './ui/input';
 import { FolderOpen, Folder, Plus, MessageSquare, Clock, ChevronDown, ChevronRight, Edit3, Check, X, Trash2, Settings, FolderPlus, RefreshCw, Sparkles, Edit2, Star, Search } from 'lucide-react';
 import { cn } from '../lib/utils';
 import ClaudeLogo from './ClaudeLogo';
-import CursorLogo from './CursorLogo.jsx';
 import { api } from '../utils/api';
 
 // Move formatTimeAgo outside component to avoid recreation on every render
@@ -218,12 +217,11 @@ function Sidebar({
 
   // Helper function to get all sessions for a project (initial + additional)
   const getAllSessions = (project) => {
-    // Combine Claude and Cursor sessions; Sidebar will display icon per row
+    // Get Claude sessions
     const claudeSessions = [...(project.sessions || []), ...(additionalSessions[project.name] || [])].map(s => ({ ...s, __provider: 'claude' }));
-    const cursorSessions = (project.cursorSessions || []).map(s => ({ ...s, __provider: 'cursor' }));
     // Sort by most recent activity/date
-    const normalizeDate = (s) => new Date(s.__provider === 'cursor' ? s.createdAt : s.lastActivity);
-    return [...claudeSessions, ...cursorSessions].sort((a, b) => normalizeDate(b) - normalizeDate(a));
+    const normalizeDate = (s) => new Date(s.lastActivity);
+    return claudeSessions.sort((a, b) => normalizeDate(b) - normalizeDate(a));
   };
 
   // Helper function to get the last activity date for a project
@@ -998,8 +996,7 @@ function Sidebar({
                         </div>
                       ) : (
                         getAllSessions(project).map((session) => {
-                          // Handle both Claude and Cursor session formats
-                          const isCursorSession = session.__provider === 'cursor';
+                          // Handle Claude session format
                           
                           // Calculate if session is active (within last 10 minutes)
                           const sessionDate = new Date(isCursorSession ? session.createdAt : session.lastActivity);
@@ -1042,7 +1039,7 @@ function Sidebar({
                                     selectedSession?.id === session.id ? "bg-primary/10" : "bg-muted/50"
                                   )}>
                                     {isCursorSession ? (
-                                      <CursorLogo className="w-3 h-3" />
+                                      <ClaudeLogo className="w-3 h-3" />
                                     ) : (
                                       <ClaudeLogo className="w-3 h-3" />
                                     )}
@@ -1064,7 +1061,7 @@ function Sidebar({
                                   {/* Provider tiny icon */}
                                   <span className="ml-1 opacity-70">
                                     {isCursorSession ? (
-                                      <CursorLogo className="w-3 h-3" />
+                                      <ClaudeLogo className="w-3 h-3" />
                                     ) : (
                                       <ClaudeLogo className="w-3 h-3" />
                                     )}
@@ -1101,7 +1098,7 @@ function Sidebar({
                               >
                                 <div className="flex items-start gap-2 min-w-0 w-full">
                                   {isCursorSession ? (
-                                    <CursorLogo className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                                    <ClaudeLogo className="w-3 h-3 mt-0.5 flex-shrink-0" />
                                   ) : (
                                     <ClaudeLogo className="w-3 h-3 mt-0.5 flex-shrink-0" />
                                   )}
@@ -1122,7 +1119,7 @@ function Sidebar({
                                       {/* Provider tiny icon */}
                                       <span className="ml-1 opacity-70">
                                         {isCursorSession ? (
-                                          <CursorLogo className="w-3 h-3" />
+                                          <ClaudeLogo className="w-3 h-3" />
                                         ) : (
                                           <ClaudeLogo className="w-3 h-3" />
                                         )}

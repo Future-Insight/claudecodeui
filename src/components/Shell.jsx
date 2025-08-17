@@ -532,9 +532,7 @@ function Shell({ selectedProject, selectedSession, isActive }) {
           <div className="flex items-center space-x-2">
             <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
             {selectedSession && (() => {
-              const displaySessionName = selectedSession.__provider === 'cursor'
-                ? (selectedSession.name || 'Untitled Session')
-                : (selectedSession.summary || 'New Session');
+              const displaySessionName = selectedSession.summary || 'New Session';
               return (
                 <span className="text-xs text-blue-300">
                   ({displaySessionName.slice(0, 30)}...)
@@ -608,9 +606,7 @@ function Shell({ selectedProject, selectedSession, isActive }) {
               <p className="text-gray-400 text-sm mt-3 px-2">
                 {selectedSession ? 
                   (() => {
-                    const displaySessionName = selectedSession.__provider === 'cursor'
-                      ? (selectedSession.name || 'Untitled Session')
-                      : (selectedSession.summary || 'New Session');
+                    const displaySessionName = selectedSession.summary || 'New Session';
                     return `Resume session: ${displaySessionName.slice(0, 50)}...`;
                   })() : 
                   'Start a new Claude session'
