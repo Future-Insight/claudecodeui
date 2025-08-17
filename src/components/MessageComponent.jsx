@@ -3,9 +3,8 @@ import ReactMarkdown from 'react-markdown';
 import TodoList from './TodoList';
 import { formatUsageLimitText } from '../utils/chatUtils';
 
-import ClaudeLogo from './ClaudeLogo';
 
-export const MessageComponent = memo(({ message, index, prevMessage, createDiff, onFileOpen, onShowSettings, autoExpandTools, showRawParameters }) => {
+export const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, onShowSettings, autoExpandTools, showRawParameters }) => {
   const isGrouped = prevMessage && prevMessage.type === message.type &&
     prevMessage.type === 'assistant' &&
     !prevMessage.isToolUse && !message.isToolUse;
@@ -78,7 +77,7 @@ export const MessageComponent = memo(({ message, index, prevMessage, createDiff,
         /* Claude/Error/Tool messages on the left */
         <div className="w-full">
           {!isGrouped && (
-            <div className="flex items-center space-x-3 mb-2">
+            <div className="flex items-center space-x-2 mb-1">
               {message.type === 'error' ? (
                 <div className="w-8 h-8 bg-red-600 rounded-full flex items-center justify-center text-white text-sm flex-shrink-0">
                   !
@@ -87,17 +86,25 @@ export const MessageComponent = memo(({ message, index, prevMessage, createDiff,
                 <div className="w-8 h-8 bg-gray-600 dark:bg-gray-700 rounded-full flex items-center justify-center text-white text-sm flex-shrink-0">
                   🔧
                 </div>
-              ) : (
-                <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm flex-shrink-0 p-1">
-                  {(localStorage.getItem('selected-provider') || 'claude') === 'cursor' ? (
-                    <ClaudeLogo className="w-full h-full" />
-                  ) : (
-                    <ClaudeLogo className="w-full h-full" />
-                  )}
-                </div>
-              )}
-              <div className="text-sm font-medium text-gray-900 dark:text-white">
-                {message.type === 'error' ? 'Error' : message.type === 'tool' ? 'Tool' : ((localStorage.getItem('selected-provider') || 'claude') === 'cursor' ? 'Cursor' : 'Claude')}
+              ) : null}
+              <div className="text-sm font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                <span
+                  className={import.meta.env.DEV ? 'cursor-pointer hover:text-blue-600 dark:hover:text-blue-400' : ''}
+                  onClick={import.meta.env.DEV ? () => {
+                    navigator.clipboard.writeText(JSON.stringify(message, null, 2))
+                      .then(() => {
+                        // 简单的视觉反馈
+                        console.log('消息JSON已复制到剪贴板');
+                      })
+                      .catch(err => console.error('复制失败:', err));
+                  } : undefined}
+                  title={import.meta.env.DEV ? '点击复制消息JSON' : ''}
+                >
+                  {message.type === 'error' ? 'Error' : message.type === 'tool' ? 'Tool' : 'Claude'}
+                </span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  {new Date(message.timestamp).toLocaleTimeString()}
+                </span>
               </div>
             </div>
           )}
@@ -906,10 +913,12 @@ export const MessageComponent = memo(({ message, index, prevMessage, createDiff,
                     <ReactMarkdown
                       components={{
                         code: ({ node, inline, className, children, ...props }) => {
-                          return inline ? (
-                            <strong className="text-blue-600 dark:text-blue-400 font-bold not-prose" {...props}>
+                          // Check if it's inline code (no className or not a code block)
+                          const isInline = inline || !className?.includes('language-');
+                          return isInline ? (
+                            <code className="bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 px-1 py-0.5 rounded text-sm font-mono" {...props}>
                               {children}
-                            </strong>
+                            </code>
                           ) : (
                             <div className="bg-gray-100 dark:bg-gray-800 p-2 rounded-lg overflow-hidden my-2">
                               <code className="text-gray-800 dark:text-gray-200 text-sm font-mono block whitespace-pre-wrap break-words" {...props}>
@@ -953,9 +962,6 @@ export const MessageComponent = memo(({ message, index, prevMessage, createDiff,
               </div>
             )}
 
-            <div className={`text-xs text-gray-500 dark:text-gray-400 mt-1 ${isGrouped ? 'opacity-0 group-hover:opacity-100' : ''}`}>
-              {new Date(message.timestamp).toLocaleTimeString()}
-            </div>
           </div>
         </div>
       )}
