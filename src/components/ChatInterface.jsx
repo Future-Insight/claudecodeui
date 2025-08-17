@@ -211,7 +211,6 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
     }
   }, [messagesOffset]);
 
-  // Load Cursor session messages from SQLite via backend
 
 
 
@@ -323,7 +322,6 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
           setSessionMessages([]);
         }
         setCurrentSessionId(null);
-        sessionStorage.removeItem('cursorSessionId');
         setMessagesOffset(0);
         setHasMoreMessages(false);
         setTotalMessages(0);
@@ -419,7 +417,7 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
             contentLength: messageData?.content?.length || 0
           });
 
-          // Handle Cursor streaming format (content_block_delta / content_block_stop)
+          // Handle streaming format (content_block_delta / content_block_stop)
           if (messageData && typeof messageData === 'object' && messageData.type) {
             if (messageData.type === 'content_block_delta' && messageData.delta?.text) {
               // Buffer deltas and flush periodically to reduce rerenders
@@ -679,144 +677,6 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
           }]);
           break;
 
-        case 'cursor-system':
-          // Handle Cursor system/init messages similar to Claude
-          try {
-            const cdata = latestMessage.data;
-            if (cdata && cdata.type === 'system' && cdata.subtype === 'init' && cdata.session_id) {
-              // If we already have a session and this differs, switch (duplication/redirect)
-              if (currentSessionId && cdata.session_id !== currentSessionId) {
-                console.log('🔄 Cursor session switch detected:', { originalSession: currentSessionId, newSession: cdata.session_id });
-                setIsSystemSessionChange(true);
-                if (onNavigateToSession) {
-                  onNavigateToSession(cdata.session_id);
-                }
-                return;
-              }
-              // If we don't yet have a session, adopt this one
-              if (!currentSessionId) {
-                console.log('🔄 Cursor new session init detected:', { newSession: cdata.session_id });
-                setIsSystemSessionChange(true);
-                if (onNavigateToSession) {
-                  onNavigateToSession(cdata.session_id);
-                }
-                return;
-              }
-            }
-            // For other cursor-system messages, avoid dumping raw objects to chat
-          } catch (e) {
-            console.warn('Error handling cursor-system message:', e);
-          }
-          break;
-
-        case 'cursor-user':
-          // Handle Cursor user messages (usually echoes)
-          // Don't add user messages as they're already shown from input
-          break;
-
-        case 'cursor-tool-use':
-          // Handle Cursor tool use messages
-          setChatMessages(prev => [...prev, {
-            type: 'assistant',
-            content: `Using tool: ${latestMessage.tool} ${latestMessage.input ? `with ${latestMessage.input}` : ''}`,
-            timestamp: new Date(),
-            isToolUse: true,
-            toolName: latestMessage.tool,
-            toolInput: latestMessage.input
-          }]);
-          break;
-
-        case 'cursor-error':
-          // Show Cursor errors as error messages in chat
-          setChatMessages(prev => [...prev, {
-            type: 'error',
-            content: `Cursor error: ${latestMessage.error || 'Unknown error'}`,
-            timestamp: new Date()
-          }]);
-          break;
-
-        case 'cursor-result':
-          // Handle Cursor completion and final result text
-          setIsLoading(false);
-          setCanAbortSession(false);
-          setClaudeStatus(null);
-          try {
-            const r = latestMessage.data || {};
-            const textResult = typeof r.result === 'string' ? r.result : '';
-            // Flush buffered deltas before finalizing
-            if (streamTimerRef.current) {
-              clearTimeout(streamTimerRef.current);
-              streamTimerRef.current = null;
-            }
-            const pendingChunk = streamBufferRef.current;
-            streamBufferRef.current = '';
-
-            setChatMessages(prev => {
-              const updated = [...prev];
-              // Try to consolidate into the last streaming assistant message
-              const last = updated[updated.length - 1];
-              if (last && last.type === 'assistant' && !last.isToolUse && last.isStreaming) {
-                // Replace streaming content with the final content so deltas don't remain
-                const finalContent = textResult && textResult.trim() ? textResult : (last.content || '') + (pendingChunk || '');
-                last.content = finalContent;
-                last.isStreaming = false;
-              } else if (textResult && textResult.trim()) {
-                updated.push({ type: r.is_error ? 'error' : 'assistant', content: textResult, timestamp: new Date(), isStreaming: false });
-              }
-              return updated;
-            });
-          } catch (e) {
-            console.warn('Error handling cursor-result message:', e);
-          }
-
-          // Mark session as inactive
-          const cursorSessionId = currentSessionId || sessionStorage.getItem('pendingSessionId');
-          if (cursorSessionId && onSessionInactive) {
-            onSessionInactive(cursorSessionId);
-          }
-
-          // Store session ID for future use and trigger refresh
-          if (cursorSessionId && !currentSessionId) {
-            setCurrentSessionId(cursorSessionId);
-            sessionStorage.removeItem('pendingSessionId');
-
-            // Trigger a project refresh to update the sidebar with the new session
-            if (window.refreshProjects) {
-              setTimeout(() => window.refreshProjects(), 500);
-            }
-          }
-          break;
-
-        case 'cursor-output':
-          // Handle Cursor raw terminal output; strip ANSI and ignore empty control-only payloads
-          try {
-            const raw = String(latestMessage.data ?? '');
-            const cleaned = raw.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '').trim();
-            if (cleaned) {
-              streamBufferRef.current += (streamBufferRef.current ? `\n${cleaned}` : cleaned);
-              if (!streamTimerRef.current) {
-                streamTimerRef.current = setTimeout(() => {
-                  const chunk = streamBufferRef.current;
-                  streamBufferRef.current = '';
-                  streamTimerRef.current = null;
-                  if (!chunk) return;
-                  setChatMessages(prev => {
-                    const updated = [...prev];
-                    const last = updated[updated.length - 1];
-                    if (last && last.type === 'assistant' && !last.isToolUse && last.isStreaming) {
-                      last.content = last.content ? `${last.content}\n${chunk}` : chunk;
-                    } else {
-                      updated.push({ type: 'assistant', content: chunk, timestamp: new Date(), isStreaming: true });
-                    }
-                    return updated;
-                  });
-                }, 100);
-              }
-            }
-          } catch (e) {
-            console.warn('Error handling cursor-output message:', e);
-          }
-          break;
 
         case 'claude-complete':
           setIsLoading(false);
@@ -1251,7 +1111,7 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
     setTimeout(() => scrollToBottom(), 100); // Longer delay to ensure message is rendered
 
     // Determine effective session id for replies to avoid race on state updates
-    const effectiveSessionId = currentSessionId || selectedSession?.id || sessionStorage.getItem('cursorSessionId');
+    const effectiveSessionId = currentSessionId || selectedSession?.id;
 
     // Session Protection: Mark session as active to prevent automatic project updates during conversation
     // Use existing session if available; otherwise a temporary placeholder until backend provides real ID
@@ -1260,11 +1120,10 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
       onSessionActive(sessionToActivate);
     }
 
-    // Get tools settings from localStorage based on provider
+    // Get tools settings from localStorage
     const getToolsSettings = () => {
       try {
-        const settingsKey = provider === 'cursor' ? 'cursor-tools-settings' : 'claude-tools-settings';
-        const savedSettings = safeLocalStorage.getItem(settingsKey);
+        const savedSettings = safeLocalStorage.getItem('claude-tools-settings');
         if (savedSettings) {
           return JSON.parse(savedSettings);
         }
@@ -1280,39 +1139,20 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
 
     const toolsSettings = getToolsSettings();
 
-    // Send command based on provider
-    if (provider === 'cursor') {
-      // Send Cursor command (always use cursor-command; include resume/sessionId when replying)
-      sendMessage({
-        type: 'cursor-command',
-        command: input,
-        sessionId: effectiveSessionId,
-        options: {
-          // Prefer fullPath (actual cwd for project), fallback to path
-          cwd: selectedProject.fullPath || selectedProject.path,
-          projectPath: selectedProject.fullPath || selectedProject.path,
-          sessionId: effectiveSessionId,
-          resume: !!effectiveSessionId,
-          skipPermissions: toolsSettings?.skipPermissions || false,
-          toolsSettings: toolsSettings
-        }
-      });
-    } else {
-      // Send Claude command (existing code)
-      sendMessage({
-        type: 'claude-command',
-        command: input,
-        options: {
-          projectPath: selectedProject.path,
-          cwd: selectedProject.fullPath,
-          sessionId: currentSessionId,
-          resume: !!currentSessionId,
-          toolsSettings: toolsSettings,
-          permissionMode: permissionMode,
-          images: uploadedImages // Pass images to backend
-        }
-      });
-    }
+    // Send Claude command
+    sendMessage({
+      type: 'claude-command',
+      command: input,
+      options: {
+        projectPath: selectedProject.path,
+        cwd: selectedProject.fullPath,
+        sessionId: currentSessionId,
+        resume: !!currentSessionId,
+        toolsSettings: toolsSettings,
+        permissionMode: permissionMode,
+        images: uploadedImages // Pass images to backend
+      }
+    });
 
     setInput('');
     setAttachedImages([]);
@@ -1507,81 +1347,11 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
           ) : chatMessages.length === 0 ? (
             <div className="flex items-center justify-center h-full">
               {!selectedSession && !currentSessionId && (
-                <div className="text-center px-6 sm:px-4 py-8">
-                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">Choose Your AI Assistant</h2>
-                  <p className="text-gray-600 dark:text-gray-400 mb-8">
-                    Select a provider to start a new conversation
-                  </p>
-
-                  <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-8">
-                    {/* Claude Button */}
-                    <button
-                      onClick={() => {
-                        setProvider('claude');
-                        localStorage.setItem('selected-provider', 'claude');
-                        // Focus input after selection
-                        setTimeout(() => textareaRef.current?.focus(), 100);
-                      }}
-                      className={`group relative w-64 h-32 bg-white dark:bg-gray-800 rounded-xl border-2 transition-all duration-200 hover:scale-105 hover:shadow-xl ${provider === 'claude'
-                        ? 'border-blue-500 shadow-lg ring-2 ring-blue-500/20'
-                        : 'border-gray-200 dark:border-gray-700 hover:border-blue-400'
-                        }`}
-                    >
-                      <div className="flex flex-col items-center justify-center h-full gap-3">
-                        <ClaudeLogo className="w-10 h-10" />
-                        <div>
-                          <p className="font-semibold text-gray-900 dark:text-white">Claude</p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">by Anthropic</p>
-                        </div>
-                      </div>
-                      {provider === 'claude' && (
-                        <div className="absolute top-2 right-2">
-                          <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
-                            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                            </svg>
-                          </div>
-                        </div>
-                      )}
-                    </button>
-
-                    {/* Cursor Button */}
-                    <button
-                      onClick={() => {
-                        setProvider('cursor');
-                        localStorage.setItem('selected-provider', 'cursor');
-                        // Focus input after selection
-                        setTimeout(() => textareaRef.current?.focus(), 100);
-                      }}
-                      className={`group relative w-64 h-32 bg-white dark:bg-gray-800 rounded-xl border-2 transition-all duration-200 hover:scale-105 hover:shadow-xl ${provider === 'cursor'
-                        ? 'border-purple-500 shadow-lg ring-2 ring-purple-500/20'
-                        : 'border-gray-200 dark:border-gray-700 hover:border-purple-400'
-                        }`}
-                    >
-                      <div className="flex flex-col items-center justify-center h-full gap-3">
-                        <ClaudeLogo className="w-10 h-10" />
-                        <div>
-                          <p className="font-semibold text-gray-900 dark:text-white">Cursor</p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">AI Code Editor</p>
-                        </div>
-                      </div>
-                      {provider === 'cursor' && (
-                        <div className="absolute top-2 right-2">
-                          <div className="w-5 h-5 bg-purple-500 rounded-full flex items-center justify-center">
-                            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                            </svg>
-                          </div>
-                        </div>
-                      )}
-                    </button>
-                  </div>
-
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {provider === 'claude'
-                      ? 'Ready to use Claude AI. Start typing your message below.'
-                      : 'Select a provider above to begin'
-                    }
+                <div className="text-center text-gray-500 dark:text-gray-400 px-6 sm:px-4">
+                  <ClaudeLogo className="w-16 h-16 mx-auto mb-4" />
+                  <p className="font-bold text-lg sm:text-xl mb-3">Start a conversation with Claude</p>
+                  <p className="text-sm sm:text-base leading-relaxed">
+                    Ask questions about your code, request changes, or get help with development tasks
                   </p>
                 </div>
               )}
@@ -1665,13 +1435,9 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
               <div className="w-full">
                 <div className="flex items-center space-x-3 mb-2">
                   <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm flex-shrink-0 p-1 bg-transparent">
-                    {(localStorage.getItem('selected-provider') || 'claude') === 'cursor' ? (
-                      <ClaudeLogo className="w-full h-full" />
-                    ) : (
-                      <ClaudeLogo className="w-full h-full" />
-                    )}
+                    <ClaudeLogo className="w-full h-full" />
                   </div>
-                  <div className="text-sm font-medium text-gray-900 dark:text-white">{(localStorage.getItem('selected-provider') || 'claude') === 'cursor' ? 'Cursor' : 'Claude'}</div>
+                  <div className="text-sm font-medium text-gray-900 dark:text-white">Claude</div>
                   {/* Abort button removed - functionality not yet implemented at backend */}
                 </div>
                 <div className="w-full text-sm text-gray-500 dark:text-gray-400 pl-3 sm:pl-0">

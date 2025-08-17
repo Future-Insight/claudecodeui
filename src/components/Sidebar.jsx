@@ -999,13 +999,13 @@ function Sidebar({
                           // Handle Claude session format
                           
                           // Calculate if session is active (within last 10 minutes)
-                          const sessionDate = new Date(isCursorSession ? session.createdAt : session.lastActivity);
+                          const sessionDate = new Date(session.lastActivity);
                           const diffInMinutes = Math.floor((currentTime - sessionDate) / (1000 * 60));
                           const isActive = diffInMinutes < 10;
                           
                           // Get session display values
-                          const sessionName = isCursorSession ? (session.name || 'Untitled Session') : (session.summary || 'New Session');
-                          const sessionTime = isCursorSession ? session.createdAt : session.lastActivity;
+                          const sessionName = session.summary || 'New Session';
+                          const sessionTime = session.lastActivity;
                           const messageCount = session.messageCount || 0;
                           
                           return (
@@ -1038,11 +1038,7 @@ function Sidebar({
                                     "w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0",
                                     selectedSession?.id === session.id ? "bg-primary/10" : "bg-muted/50"
                                   )}>
-                                    {isCursorSession ? (
-                                      <ClaudeLogo className="w-3 h-3" />
-                                    ) : (
-                                      <ClaudeLogo className="w-3 h-3" />
-                                    )}
+                                    <ClaudeLogo className="w-3 h-3" />
                                   </div>
                                   <div className="min-w-0 flex-1">
                                     <div className="text-xs font-medium truncate text-foreground">
@@ -1060,16 +1056,12 @@ function Sidebar({
                                       )}
                                   {/* Provider tiny icon */}
                                   <span className="ml-1 opacity-70">
-                                    {isCursorSession ? (
-                                      <ClaudeLogo className="w-3 h-3" />
-                                    ) : (
-                                      <ClaudeLogo className="w-3 h-3" />
-                                    )}
+                                    <ClaudeLogo className="w-3 h-3" />
                                   </span>
                                     </div>
                                   </div>
                                   {/* Mobile delete button - only for Claude sessions */}
-                                  {!isCursorSession && (
+                                  {
                                     <button
                                       className="w-5 h-5 rounded-md bg-red-50 dark:bg-red-900/20 flex items-center justify-center active:scale-95 transition-transform opacity-70 ml-1"
                                       onClick={(e) => {
@@ -1080,7 +1072,7 @@ function Sidebar({
                                     >
                                       <Trash2 className="w-2.5 h-2.5 text-red-600 dark:text-red-400" />
                                     </button>
-                                  )}
+                                  }
                                 </div>
                               </div>
                             </div>
@@ -1097,11 +1089,7 @@ function Sidebar({
                                 onTouchEnd={handleTouchClick(() => onSessionSelect(session))}
                               >
                                 <div className="flex items-start gap-2 min-w-0 w-full">
-                                  {isCursorSession ? (
-                                    <ClaudeLogo className="w-3 h-3 mt-0.5 flex-shrink-0" />
-                                  ) : (
-                                    <ClaudeLogo className="w-3 h-3 mt-0.5 flex-shrink-0" />
-                                  )}
+                                  <ClaudeLogo className="w-3 h-3 mt-0.5 flex-shrink-0" />
                                   <div className="min-w-0 flex-1">
                                     <div className="text-xs font-medium truncate text-foreground">
                                       {sessionName}
@@ -1118,18 +1106,14 @@ function Sidebar({
                                       )}
                                       {/* Provider tiny icon */}
                                       <span className="ml-1 opacity-70">
-                                        {isCursorSession ? (
-                                          <ClaudeLogo className="w-3 h-3" />
-                                        ) : (
-                                          <ClaudeLogo className="w-3 h-3" />
-                                        )}
+                                        <ClaudeLogo className="w-3 h-3" />
                                       </span>
                                     </div>
                                   </div>
                                 </div>
                               </Button>
                               {/* Desktop hover buttons - only for Claude sessions */}
-                              {!isCursorSession && (
+                              {
                               <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
                                 {editingSession === session.id ? (
                                   <>
@@ -1216,7 +1200,7 @@ function Sidebar({
                                   </>
                                 )}
                               </div>
-                              )}
+                              }
                             </div>
                           </div>
                           );
