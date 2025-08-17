@@ -18,11 +18,10 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { useDropzone } from 'react-dropzone';
-import TodoList from './TodoList';
 import ClaudeLogo from './ClaudeLogo.jsx';
 import ClaudeStatus from './ClaudeStatus';
 import { MicButton } from './MicButton.jsx';
-import { api, authenticatedFetch } from '../utils/api';
+import { api } from '../utils/api';
 
 // 导入拆分的组件和工具函数
 import { MessageComponent } from './MessageComponent.jsx';
@@ -30,7 +29,7 @@ import { ImageAttachment } from './ImageAttachment.jsx';
 import { formatUsageLimitText, safeLocalStorage, calculateDiff, flattenFileTree, convertSessionMessages } from '../utils/chatUtils.js';
 
 // Memoized message component to prevent unnecessary re-renders
-function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, messages, onFileOpen, onInputFocusChange, onSessionActive, onSessionInactive, onReplaceTemporarySession, onNavigateToSession, onShowSettings, autoExpandTools, showRawParameters, autoScrollToBottom, sendByCtrlEnter }) {
+function ChatInterface({ selectedProject, selectedSession, sendMessage, messages, onFileOpen, onInputFocusChange, onSessionActive, onSessionInactive, onReplaceTemporarySession, onNavigateToSession, onShowSettings, autoExpandTools, showRawParameters, autoScrollToBottom, sendByCtrlEnter }) {
   const [input, setInput] = useState(() => {
     if (typeof window !== 'undefined' && selectedProject) {
       return safeLocalStorage.getItem(`draft_input_${selectedProject.name}`) || '';
@@ -75,25 +74,10 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
   const [canAbortSession, setCanAbortSession] = useState(false);
   const [isUserScrolledUp, setIsUserScrolledUp] = useState(false);
   const scrollPositionRef = useRef({ height: 0, top: 0 });
-  const [showCommandMenu, setShowCommandMenu] = useState(false);
-  const [slashCommands, setSlashCommands] = useState([]);
-  const [filteredCommands, setFilteredCommands] = useState([]);
   const [isTextareaExpanded, setIsTextareaExpanded] = useState(false);
-  const [selectedCommandIndex, setSelectedCommandIndex] = useState(-1);
-  const [slashPosition, setSlashPosition] = useState(-1);
   const [visibleMessageCount, setVisibleMessageCount] = useState(100);
   const [claudeStatus, setClaudeStatus] = useState(null);
-  const [provider, setProvider] = useState(() => {
-    return localStorage.getItem('selected-provider') || 'claude';
-  });
-  // When selecting a session from Sidebar, auto-switch provider to match session's origin
-  useEffect(() => {
-    if (selectedSession && selectedSession.__provider && selectedSession.__provider !== provider) {
-      setProvider(selectedSession.__provider);
-      localStorage.setItem('selected-provider', selectedSession.__provider);
-    }
-  }, [selectedSession]);
-
+  const provider = localStorage.getItem('selected-provider') || 'claude';
 
   // Memoized diff calculation to prevent recalculating on every render
   const createDiff = useMemo(() => {
@@ -114,14 +98,8 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
     };
   }, []);
 
-  // Load session messages from API with pagination
+  // Load session messages from API with pagination 
   const loadSessionMessages = useCallback(async (projectName, sessionId, loadMore = false) => {
-    console.log('📂 [ChatInterface] Loading session messages:', {
-      projectName,
-      sessionId,
-      loadMore,
-      currentOffset: loadMore ? messagesOffset : 0
-    });
     if (!projectName || !sessionId) return [];
 
     const isInitialLoad = !loadMore;
@@ -139,62 +117,15 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
       }
       const data = await response.json();
 
-      console.log('📈 [ChatInterface] Session messages API response:', {
-        hasMore: data.hasMore,
-        messagesCount: data.messages?.length || 0,
-        total: data.total,
-        offset: currentOffset
-      });
-
-      // Normalize messages to ensure content is a string
-      const normalizeMessage = (msg) => {
-        if (!msg || typeof msg !== 'object') return msg;
-
-        let content = '';
-        if (typeof msg.content === 'string') {
-          content = msg.content;
-        } else if (typeof msg.content === 'object' && msg.content) {
-          // Extract text from content object
-          if (Array.isArray(msg.content)) {
-            // Handle array content
-            content = msg.content
-              .filter(part => typeof part === 'string' || (part && (part.text || part.content)))
-              .map(part => {
-                if (typeof part === 'string') return part;
-                return part.text || part.content || '';
-              })
-              .join('\n');
-          } else {
-            // Handle object content
-            content = msg.content.content || msg.content.text || msg.content.message || '';
-          }
-        }
-
-        return {
-          ...msg,
-          type: msg.type || msg.role || 'user',
-          content: content
-        };
-      };
-
       // Handle paginated response
       if (data.hasMore !== undefined) {
-        const normalizedMessages = (data.messages || []).map(normalizeMessage);
-        console.log('📄 [ChatInterface] Returning paginated messages:', {
-          count: normalizedMessages.length,
-          hasMore: data.hasMore,
-          total: data.total
-        });
         setHasMoreMessages(data.hasMore);
         setTotalMessages(data.total);
         setMessagesOffset(currentOffset + (data.messages?.length || 0));
-        return normalizedMessages;
+        return data.messages || [];
       } else {
         // Backward compatibility for non-paginated response
-        const messages = (data.messages || []).map(normalizeMessage);
-        console.log('📄 [ChatInterface] Returning non-paginated messages:', {
-          count: messages.length
-        });
+        const messages = data.messages || [];
         setHasMoreMessages(false);
         setTotalMessages(messages.length);
         return messages;
@@ -210,8 +141,6 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
       }
     }
   }, [messagesOffset]);
-
-
 
 
 
@@ -245,7 +174,6 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
 
       // Check if we should load more messages (scrolled near top)
       const scrolledNearTop = container.scrollTop < 100;
-      const provider = localStorage.getItem('selected-provider') || 'claude';
 
       if (scrolledNearTop && hasMoreMessages && !isLoadingMoreMessages && selectedSession && selectedProject) {
         // Save current scroll position
@@ -275,16 +203,7 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
   useEffect(() => {
     // Load session messages when session changes
     const loadMessages = async () => {
-      console.log('🔄 [ChatInterface] Session change detected:', {
-        hasSelectedSession: !!selectedSession,
-        sessionId: selectedSession?.id,
-        hasProject: !!selectedProject,
-        projectName: selectedProject?.name,
-        isSystemChange: isSystemSessionChange
-      });
       if (selectedSession && selectedProject) {
-        const provider = localStorage.getItem('selected-provider') || 'claude';
-        console.log('🎨 [ChatInterface] Loading messages for provider:', provider);
 
         // Reset pagination state when switching sessions
         setMessagesOffset(0);
@@ -292,10 +211,6 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
         setTotalMessages(0);
 
         {
-          console.log('🔵 [ChatInterface] Claude session setup:', {
-            sessionId: selectedSession.id,
-            projectName: selectedProject.name
-          });
           // For Claude, load messages normally with pagination
           setCurrentSessionId(selectedSession.id);
 
@@ -377,32 +292,18 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
     // Handle WebSocket messages
     if (messages.length > 0) {
       const latestMessage = messages[messages.length - 1];
-      console.log('📨 [ChatInterface] Processing WebSocket message:', {
-        type: latestMessage.type,
-        messageCount: messages.length,
-        currentSessionId,
-        selectedSessionId: selectedSession?.id,
-        timestamp: new Date().toISOString()
-      });
 
       switch (latestMessage.type) {
         case 'session-created':
-          console.log('🎯 [ChatInterface] Session created:', {
-            sessionId: latestMessage.sessionId,
-            currentSessionId,
-            hasPendingId: !!sessionStorage.getItem('pendingSessionId')
-          });
           // New session created by Claude CLI - we receive the real session ID here
           // Store it temporarily until conversation completes (prevents premature session association)
           if (latestMessage.sessionId && !currentSessionId) {
             sessionStorage.setItem('pendingSessionId', latestMessage.sessionId);
-            console.log('💾 [ChatInterface] Stored pending session ID:', latestMessage.sessionId);
 
             // Session Protection: Replace temporary "new-session-*" identifier with real session ID
             // This maintains protection continuity - no gap between temp ID and real ID
             // The temporary session is removed and real session is marked as active
             if (onReplaceTemporarySession) {
-              console.log('🔄 [ChatInterface] Replacing temporary session');
               onReplaceTemporarySession(latestMessage.sessionId);
             }
           }
@@ -410,12 +311,6 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
 
         case 'claude-response':
           const messageData = latestMessage.data.message || latestMessage.data;
-          console.log('🤖 [ChatInterface] Claude response received:', {
-            hasMessage: !!messageData,
-            messageType: messageData?.type,
-            contentType: Array.isArray(messageData?.content) ? 'array' : typeof messageData?.content,
-            contentLength: messageData?.content?.length || 0
-          });
 
           // Handle streaming format (content_block_delta / content_block_stop)
           if (messageData && typeof messageData === 'object' && messageData.type) {
@@ -434,18 +329,9 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
                     if (last && last.type === 'assistant' && !last.isToolUse && last.isStreaming) {
                       const oldLength = last.content?.length || 0;
                       last.content = (last.content || '') + chunk;
-                      console.log('🔄 [ChatInterface] Streaming update (append):', {
-                        chunkLength: chunk.length,
-                        oldContentLength: oldLength,
-                        newContentLength: last.content.length
-                      });
                     } else {
                       const newMessage = { type: 'assistant', content: chunk, timestamp: new Date(), isStreaming: true };
                       updated.push(newMessage);
-                      console.log('🆕 [ChatInterface] Streaming update (new message):', {
-                        chunkLength: chunk.length,
-                        totalMessages: updated.length
-                      });
                     }
                     return updated;
                   });
@@ -495,20 +381,14 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
             currentSessionId &&
             latestMessage.data.session_id !== currentSessionId) {
 
-            console.log('🔄 [ChatInterface] Claude CLI session duplication detected:', {
-              originalSession: currentSessionId,
-              newSession: latestMessage.data.session_id,
-              timestamp: new Date().toISOString()
-            });
+            // Claude CLI session duplication detected
 
             // Mark this as a system-initiated session change to preserve messages
             setIsSystemSessionChange(true);
-            console.log('🔒 [ChatInterface] Marked as system session change');
 
             // Switch to the new session using React Router navigation
             // This triggers the session loading logic in App.jsx without a page reload
             if (onNavigateToSession) {
-              console.log('🧭 [ChatInterface] Navigating to new session:', latestMessage.data.session_id);
               onNavigateToSession(latestMessage.data.session_id);
             }
             return; // Don't process the message further, let the navigation handle it
@@ -520,9 +400,6 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
             latestMessage.data.session_id &&
             !currentSessionId) {
 
-            console.log('🔄 New session init detected:', {
-              newSession: latestMessage.data.session_id
-            });
 
             // Mark this as a system-initiated session change to preserve messages
             setIsSystemSessionChange(true);
@@ -540,7 +417,6 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
             latestMessage.data.session_id &&
             currentSessionId &&
             latestMessage.data.session_id === currentSessionId) {
-            console.log('🔄 System init message for current session, ignoring');
             return; // Don't process the message further
           }
 
@@ -550,12 +426,6 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
               if (part.type === 'tool_use') {
                 // Add tool use message
                 const toolInput = part.input ? JSON.stringify(part.input, null, 2) : '';
-                console.log('🔧 [ChatInterface] Adding tool use message:', {
-                  toolName: part.name,
-                  toolId: part.id,
-                  hasInput: !!toolInput,
-                  inputLength: toolInput.length
-                });
                 setChatMessages(prev => [...prev, {
                   type: 'assistant',
                   content: '',
@@ -571,10 +441,6 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
                 let content = formatUsageLimitText(part.text);
 
                 // Add regular text message
-                console.log('💬 [ChatInterface] Adding assistant text message (array):', {
-                  contentLength: content.length,
-                  contentPreview: content.substring(0, 100) + (content.length > 100 ? '...' : '')
-                });
                 setChatMessages(prev => [...prev, {
                   type: 'assistant',
                   content: content,
@@ -587,10 +453,6 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
             let content = formatUsageLimitText(messageData.content);
 
             // Add regular text message
-            console.log('💬 [ChatInterface] Adding assistant message (string):', {
-              contentLength: content.length,
-              contentPreview: content.substring(0, 100) + (content.length > 100 ? '...' : '')
-            });
             setChatMessages(prev => [...prev, {
               type: 'assistant',
               content: content,
@@ -603,15 +465,9 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
             for (const part of messageData.content) {
               if (part.type === 'tool_result') {
                 // Find the corresponding tool use and update it with the result
-                console.log('📊 [ChatInterface] Updating tool result:', {
-                  toolUseId: part.tool_use_id,
-                  isError: part.is_error,
-                  resultLength: part.content?.length || 0
-                });
                 setChatMessages(prev => {
                   const updated = prev.map(msg => {
                     if (msg.isToolUse && msg.toolId === part.tool_use_id) {
-                      console.log('🎯 [ChatInterface] Found matching tool use message, updating result');
                       return {
                         ...msg,
                         toolResult: {
@@ -622,9 +478,6 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
                       };
                     }
                     return msg;
-                  });
-                  console.log('🔄 [ChatInterface] Tool result update completed:', {
-                    totalMessages: updated.length
                   });
                   return updated;
                 });
@@ -834,12 +687,6 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
 
   // Show only recent messages for better performance
   const visibleMessages = useMemo(() => {
-    console.log('ChatInterface visibleMessages calculation:', {
-      chatMessagesLength: chatMessages.length,
-      visibleMessageCount,
-      chatMessages: chatMessages.slice(0, 3) // Show first 3 for debugging
-    });
-
     if (chatMessages.length <= visibleMessageCount) {
       return chatMessages;
     }
@@ -859,20 +706,11 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
 
   useEffect(() => {
     // Auto-scroll to bottom when new messages arrive
-    console.log('🔄 [ChatInterface] Messages changed, checking scroll behavior:', {
-      messagesCount: chatMessages.length,
-      autoScrollToBottom,
-      isUserScrolledUp,
-      hasScrollContainer: !!scrollContainerRef.current
-    });
     if (scrollContainerRef.current && chatMessages.length > 0) {
       if (autoScrollToBottom) {
         // If auto-scroll is enabled, always scroll to bottom unless user has manually scrolled up
         if (!isUserScrolledUp) {
-          console.log('⬇️ [ChatInterface] Auto-scrolling to bottom');
           setTimeout(() => scrollToBottom(), 50); // Small delay to ensure DOM is updated
-        } else {
-          console.log('🚫 [ChatInterface] Skipping auto-scroll (user scrolled up)');
         }
       } else {
         // When auto-scroll is disabled, preserve the visual position
@@ -893,9 +731,6 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
   // Scroll to bottom when component mounts with existing messages or when messages first load
   useEffect(() => {
     if (scrollContainerRef.current && chatMessages.length > 0) {
-      console.log('🎆 [ChatInterface] Initial messages load, scrolling to bottom:', {
-        messagesCount: chatMessages.length
-      });
       // Always scroll to bottom when messages first load (user expects to see latest)
       // Also reset scroll state
       setIsUserScrolledUp(false);
@@ -1082,19 +917,8 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
       timestamp: new Date()
     };
 
-    console.log('💬 [ChatInterface] Adding user message:', {
-      content: userMessage.content,
-      hasImages: !!userMessage.images?.length,
-      imageCount: userMessage.images?.length || 0,
-      timestamp: userMessage.timestamp
-    });
     setChatMessages(prev => {
       const newMessages = [...prev, userMessage];
-      console.log('📝 [ChatInterface] Chat messages updated:', {
-        previousCount: prev.length,
-        newCount: newMessages.length,
-        lastMessage: newMessages[newMessages.length - 1]
-      });
       return newMessages;
     });
     setIsLoading(true);
@@ -1161,8 +985,6 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
     setIsTextareaExpanded(false);
 
     // Reset textarea height
-
-
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
@@ -1403,15 +1225,6 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
 
               {visibleMessages.map((message, index) => {
                 const prevMessage = index > 0 ? visibleMessages[index - 1] : null;
-
-                // Debug: log original message from ChatInterface
-                console.log(`ChatInterface message ${index}:`, {
-                  message,
-                  hasContent: !!message.content,
-                  contentLength: message.content?.length,
-                  messageType: message.type,
-                  messageRole: message.role
-                });
 
                 return (
                   <MessageComponent
