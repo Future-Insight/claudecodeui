@@ -38,95 +38,80 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
       }
     };
   }, [autoExpandTools, isExpanded, message.isToolUse]);
-  console.log(message)
   return (
     <div
       ref={messageRef}
       className={`chat-message ${message.type} ${isGrouped ? 'grouped' : ''} px-3 sm:px-0`}
     >
       {message.type === 'user' ? (
-        /* User message on the left */
-        <div className="w-full">
-          {!isGrouped && (
-            <div className="flex items-center space-x-2 mb-1">
-              <div className="bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-bold flex items-center gap-1">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-                You
+        /* User message with frame and background */
+        <div className="w-full mb-4">
+          <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50 rounded-lg p-3 shadow-sm">
+            <div className="flex items-start">
+              {/* Header section - simplified */}
+              <div className="flex-shrink-0  pr-3">
+                {!isGrouped && (
+                  <div className="bg-blue-600 text-white px-2 py-1 rounded-full text-xs font-bold shadow-sm">
+                    You
+                  </div>
+                )}
               </div>
-              <span className="text-xs text-gray-500 dark:text-gray-400">
-                {new Date(message.timestamp).toLocaleTimeString()}
-              </span>
-              {import.meta.env.DEV && (
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(JSON.stringify(message, null, 2))
-                      .then(() => {
-                        console.log('消息JSON已复制到剪贴板');
-                      })
-                      .catch(err => console.error('复制失败:', err));
-                  }}
-                  className="text-xs text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer"
-                  title="点击复制消息JSON"
-                >
-                  📋
-                </button>
-              )}
-            </div>
-          )}
-          <div className="w-full">
-            <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words">
-{(() => {
-                const lines = message.content.split('\n');
-                if (lines.length > 10) {
-                  return (
-                    <div>
-                      {!isUserExpanded ? (
+
+              {/* Message content - takes remaining space */}
+              <div className="flex-1 min-w-0 pl-3 border-l border-blue-300 dark:border-blue-700/50">
+                <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words">
+                  {(() => {
+                    const lines = message.content.split('\n');
+                    if (lines.length > 10) {
+                      return (
                         <div>
-                          <div>{lines.slice(0, 5).join('\n')}</div>
-                          <div className="text-gray-400 dark:text-gray-500 text-xs my-2 italic">
-                            ... {lines.length - 10} 行已隐藏 ...
-                          </div>
-                          <div>{lines.slice(-5).join('\n')}</div>
-                          <button
-                            onClick={() => setIsUserExpanded(true)}
-                            className="mt-2 text-blue-600 dark:text-blue-400 hover:text-gray-600 dark:hover:text-gray-300 text-xs underline"
-                          >
-                            展开全部
-                          </button>
+                          {!isUserExpanded ? (
+                            <div>
+                              <div>{lines.slice(0, 5).join('\n')}</div>
+                              <div className="text-gray-400 dark:text-gray-500 text-xs my-2 italic">
+                                ... {lines.length - 10} 行已隐藏 ...
+                              </div>
+                              <div>{lines.slice(-5).join('\n')}</div>
+                              <button
+                                onClick={() => setIsUserExpanded(true)}
+                                className="mt-2 text-blue-600 dark:text-blue-400 hover:text-gray-600 dark:hover:text-gray-300 text-xs underline"
+                              >
+                                展开全部
+                              </button>
+                            </div>
+                          ) : (
+                            <div>
+                              <div>{message.content}</div>
+                              <button
+                                onClick={() => setIsUserExpanded(false)}
+                                className="mt-2 text-blue-600 dark:text-blue-400 hover:text-gray-600 dark:hover:text-gray-300 text-xs underline"
+                              >
+                                收起
+                              </button>
+                            </div>
+                          )}
                         </div>
-                      ) : (
-                        <div>
-                          <div>{message.content}</div>
-                          <button
-                            onClick={() => setIsUserExpanded(false)}
-                            className="mt-2 text-blue-600 dark:text-blue-400 hover:text-gray-600 dark:hover:text-gray-300 text-xs underline"
-                          >
-                            收起
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                } else {
-                  return message.content;
-                }
-              })()}
-            </div>
-            {message.images && message.images.length > 0 && (
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                {message.images.map((img, idx) => (
-                  <img
-                    key={idx}
-                    src={img.data}
-                    alt={img.name}
-                    className="rounded-lg max-w-full h-auto cursor-pointer hover:opacity-90 transition-opacity"
-                    onClick={() => window.open(img.data, '_blank')}
-                  />
-                ))}
+                      );
+                    } else {
+                      return message.content;
+                    }
+                  })()}
+                </div>
+                {message.images && message.images.length > 0 && (
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    {message.images.map((img, idx) => (
+                      <img
+                        key={idx}
+                        src={img.data}
+                        alt={img.name}
+                        className="rounded-lg max-w-full h-auto cursor-pointer hover:opacity-90 transition-opacity"
+                        onClick={() => window.open(img.data, '_blank')}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
         </div>
       ) : (
