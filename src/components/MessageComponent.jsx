@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
+import React, { useState, useEffect, useRef, memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import TodoList from './TodoList';
 import { formatUsageLimitText } from '../utils/chatUtils';
@@ -10,6 +10,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
     !prevMessage.isToolUse && !message.isToolUse;
   const messageRef = React.useRef(null);
   const [isExpanded, setIsExpanded] = React.useState(false);
+  const [isUserExpanded, setIsUserExpanded] = React.useState(false);
   React.useEffect(() => {
     if (!autoExpandTools || !messageRef.current || !message.isToolUse) return;
 
@@ -41,14 +42,77 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
   return (
     <div
       ref={messageRef}
-      className={`chat-message ${message.type} ${isGrouped ? 'grouped' : ''} ${message.type === 'user' ? 'flex justify-end px-3 sm:px-0' : 'px-3 sm:px-0'}`}
+      className={`chat-message ${message.type} ${isGrouped ? 'grouped' : ''} px-3 sm:px-0`}
     >
       {message.type === 'user' ? (
-        /* User message bubble on the right */
-        <div className="flex items-end space-x-0 sm:space-x-3 w-full sm:w-auto sm:max-w-[85%] md:max-w-md lg:max-w-lg xl:max-w-xl">
-          <div className="bg-blue-600 text-white rounded-2xl rounded-br-md px-3 sm:px-4 py-2 shadow-sm flex-1 sm:flex-initial">
-            <div className="text-sm whitespace-pre-wrap break-words">
-              {message.content}
+        /* User message on the left */
+        <div className="w-full">
+          {!isGrouped && (
+            <div className="flex items-center space-x-2 mb-1">
+              <div className="bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-bold flex items-center gap-1">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+                You
+              </div>
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                {new Date(message.timestamp).toLocaleTimeString()}
+              </span>
+              {import.meta.env.DEV && (
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(JSON.stringify(message, null, 2))
+                      .then(() => {
+                        console.log('消息JSON已复制到剪贴板');
+                      })
+                      .catch(err => console.error('复制失败:', err));
+                  }}
+                  className="text-xs text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer"
+                  title="点击复制消息JSON"
+                >
+                  📋
+                </button>
+              )}
+            </div>
+          )}
+          <div className="w-full">
+            <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words">
+{(() => {
+                const lines = message.content.split('\n');
+                if (lines.length > 10) {
+                  return (
+                    <div>
+                      {!isUserExpanded ? (
+                        <div>
+                          <div>{lines.slice(0, 5).join('\n')}</div>
+                          <div className="text-gray-400 dark:text-gray-500 text-xs my-2 italic">
+                            ... {lines.length - 10} 行已隐藏 ...
+                          </div>
+                          <div>{lines.slice(-5).join('\n')}</div>
+                          <button
+                            onClick={() => setIsUserExpanded(true)}
+                            className="mt-2 text-blue-600 dark:text-blue-400 hover:text-gray-600 dark:hover:text-gray-300 text-xs underline"
+                          >
+                            展开全部
+                          </button>
+                        </div>
+                      ) : (
+                        <div>
+                          <div>{message.content}</div>
+                          <button
+                            onClick={() => setIsUserExpanded(false)}
+                            className="mt-2 text-blue-600 dark:text-blue-400 hover:text-gray-600 dark:hover:text-gray-300 text-xs underline"
+                          >
+                            收起
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                } else {
+                  return message.content;
+                }
+              })()}
             </div>
             {message.images && message.images.length > 0 && (
               <div className="mt-2 grid grid-cols-2 gap-2">
@@ -63,15 +127,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                 ))}
               </div>
             )}
-            <div className="text-xs text-blue-100 mt-1 text-right">
-              {new Date(message.timestamp).toLocaleTimeString()}
-            </div>
           </div>
-          {!isGrouped && (
-            <div className="hidden sm:flex w-8 h-8 bg-blue-600 rounded-full items-center justify-center text-white text-sm flex-shrink-0">
-              U
-            </div>
-          )}
         </div>
       ) : (
         /* Claude/Error/Tool messages on the left */
@@ -112,19 +168,19 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
           <div className="w-full">
 
             {message.isToolUse && !['Read', 'TodoWrite', 'TodoRead'].includes(message.toolName) ? (
-              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-2 sm:p-3 mb-2">
+              <div className="bg-gray-50 dark:bg-gray-900/20 border border-gray-200 dark:border-gray-700 rounded-lg p-2 sm:p-3 mb-2">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <div className="w-5 h-5 bg-blue-600 rounded flex items-center justify-center">
+                    <div className="w-5 h-5 bg-gray-500 rounded flex items-center justify-center">
                       <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                       </svg>
                     </div>
-                    <span className="font-medium text-blue-900 dark:text-blue-100">
+                    <span className="font-medium text-gray-700 dark:text-gray-300">
                       Using {message.toolName}
                     </span>
-                    <span className="text-xs text-blue-600 dark:text-blue-400 font-mono">
+                    <span className="text-xs text-gray-500 dark:text-gray-400 font-mono">
                       {message.toolId}
                     </span>
                   </div>
@@ -134,10 +190,10 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                         e.stopPropagation();
                         onShowSettings();
                       }}
-                      className="p-1 rounded hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
+                      className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
                       title="Tool Settings"
                     >
-                      <svg className="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                       </svg>
@@ -150,7 +206,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                     if (input.file_path && input.old_string && input.new_string) {
                       return (
                         <details className="mt-2" open={autoExpandTools}>
-                          <summary className="text-sm text-blue-700 dark:text-blue-300 cursor-pointer hover:text-blue-800 dark:hover:text-blue-200 flex items-center gap-2">
+                          <summary className="text-sm text-gray-600 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300 flex items-center gap-2">
                             <svg className="w-4 h-4 transition-transform details-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                             </svg>
@@ -164,7 +220,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                                   new_string: input.new_string
                                 });
                               }}
-                              className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 underline font-mono"
+                              className="text-blue-600 dark:text-blue-400 hover:text-gray-600 dark:hover:text-gray-300 underline font-mono"
                             >
                               {input.file_path.split('/').pop()}
                             </button>
@@ -177,7 +233,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                                     old_string: input.old_string,
                                     new_string: input.new_string
                                   })}
-                                  className="text-xs font-mono text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 truncate underline cursor-pointer"
+                                  className="text-xs font-mono text-blue-600 dark:text-blue-400 hover:text-gray-600 dark:hover:text-gray-300 truncate underline cursor-pointer"
                                 >
                                   {input.file_path}
                                 </button>
@@ -206,10 +262,10 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                             </div>
                             {showRawParameters && (
                               <details className="mt-2" open={autoExpandTools}>
-                                <summary className="text-xs text-blue-600 dark:text-blue-400 cursor-pointer hover:text-blue-700 dark:hover:text-blue-300">
+                                <summary className="text-xs text-blue-600 dark:text-blue-400 cursor-pointer hover:text-gray-600 dark:hover:text-gray-300">
                                   View raw parameters
                                 </summary>
-                                <pre className="mt-2 text-xs bg-blue-100 dark:bg-blue-800/30 p-2 rounded whitespace-pre-wrap break-words overflow-hidden text-blue-900 dark:text-blue-100">
+                                <pre className="mt-2 text-xs bg-gray-100 dark:bg-gray-800/30 p-2 rounded whitespace-pre-wrap break-words overflow-hidden text-gray-700 dark:text-gray-300">
                                   {message.toolInput}
                                 </pre>
                               </details>
@@ -223,10 +279,10 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                   }
                   return (
                     <details className="mt-2" open={autoExpandTools}>
-                      <summary className="text-sm text-blue-700 dark:text-blue-300 cursor-pointer hover:text-blue-800 dark:hover:text-blue-200">
+                      <summary className="text-sm text-gray-600 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">
                         View input parameters
                       </summary>
-                      <pre className="mt-2 text-xs bg-blue-100 dark:bg-blue-800/30 p-2 rounded whitespace-pre-wrap break-words overflow-hidden text-blue-900 dark:text-blue-100">
+                      <pre className="mt-2 text-xs bg-gray-100 dark:bg-gray-800/30 p-2 rounded whitespace-pre-wrap break-words overflow-hidden text-gray-700 dark:text-gray-300">
                         {message.toolInput}
                       </pre>
                     </details>
@@ -250,7 +306,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                       if (input.file_path && input.content !== undefined) {
                         return (
                           <details className="mt-2" open={autoExpandTools}>
-                            <summary className="text-sm text-blue-700 dark:text-blue-300 cursor-pointer hover:text-blue-800 dark:hover:text-blue-200 flex items-center gap-2">
+                            <summary className="text-sm text-gray-600 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300 flex items-center gap-2">
                               <svg className="w-4 h-4 transition-transform details-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                               </svg>
@@ -264,7 +320,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                                     new_string: input.content
                                   });
                                 }}
-                                className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 underline font-mono"
+                                className="text-blue-600 dark:text-blue-400 hover:text-gray-600 dark:hover:text-gray-300 underline font-mono"
                               >
                                 {input.file_path.split('/').pop()}
                               </button>
@@ -277,7 +333,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                                       old_string: '',
                                       new_string: input.content
                                     })}
-                                    className="text-xs font-mono text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 truncate underline cursor-pointer"
+                                    className="text-xs font-mono text-blue-600 dark:text-blue-400 hover:text-gray-600 dark:hover:text-gray-300 truncate underline cursor-pointer"
                                   >
                                     {input.file_path}
                                   </button>
@@ -306,10 +362,10 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                               </div>
                               {showRawParameters && (
                                 <details className="mt-2" open={autoExpandTools}>
-                                  <summary className="text-xs text-blue-600 dark:text-blue-400 cursor-pointer hover:text-blue-700 dark:hover:text-blue-300">
+                                  <summary className="text-xs text-blue-600 dark:text-blue-400 cursor-pointer hover:text-gray-600 dark:hover:text-gray-300">
                                     View raw parameters
                                   </summary>
-                                  <pre className="mt-2 text-xs bg-blue-100 dark:bg-blue-800/30 p-2 rounded whitespace-pre-wrap break-words overflow-hidden text-blue-900 dark:text-blue-100">
+                                  <pre className="mt-2 text-xs bg-gray-100 dark:bg-gray-800/30 p-2 rounded whitespace-pre-wrap break-words overflow-hidden text-gray-700 dark:text-gray-300">
                                     {message.toolInput}
                                   </pre>
                                 </details>
@@ -330,7 +386,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                       if (input.todos && Array.isArray(input.todos)) {
                         return (
                           <details className="mt-2" open={autoExpandTools}>
-                            <summary className="text-sm text-blue-700 dark:text-blue-300 cursor-pointer hover:text-blue-800 dark:hover:text-blue-200 flex items-center gap-2">
+                            <summary className="text-sm text-gray-600 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300 flex items-center gap-2">
                               <svg className="w-4 h-4 transition-transform details-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                               </svg>
@@ -340,10 +396,10 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                               <TodoList todos={input.todos} />
                               {showRawParameters && (
                                 <details className="mt-3" open={autoExpandTools}>
-                                  <summary className="text-xs text-blue-600 dark:text-blue-400 cursor-pointer hover:text-blue-700 dark:hover:text-blue-300">
+                                  <summary className="text-xs text-blue-600 dark:text-blue-400 cursor-pointer hover:text-gray-600 dark:hover:text-gray-300">
                                     View raw parameters
                                   </summary>
-                                  <pre className="mt-2 text-xs bg-blue-100 dark:bg-blue-800/30 p-2 rounded overflow-x-auto text-blue-900 dark:text-blue-100">
+                                  <pre className="mt-2 text-xs bg-gray-100 dark:bg-gray-800/30 p-2 rounded overflow-x-auto text-gray-700 dark:text-gray-300">
                                     {message.toolInput}
                                   </pre>
                                 </details>
@@ -363,7 +419,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                       const input = JSON.parse(message.toolInput);
                       return (
                         <details className="mt-2" open={autoExpandTools}>
-                          <summary className="text-sm text-blue-700 dark:text-blue-300 cursor-pointer hover:text-blue-800 dark:hover:text-blue-200 flex items-center gap-2">
+                          <summary className="text-sm text-gray-600 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300 flex items-center gap-2">
                             <svg className="w-4 h-4 transition-transform details-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                             </svg>
@@ -388,10 +444,10 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                             )}
                             {showRawParameters && (
                               <details className="mt-2">
-                                <summary className="text-xs text-blue-600 dark:text-blue-400 cursor-pointer hover:text-blue-700 dark:hover:text-blue-300">
+                                <summary className="text-xs text-blue-600 dark:text-blue-400 cursor-pointer hover:text-gray-600 dark:hover:text-gray-300">
                                   View raw parameters
                                 </summary>
-                                <pre className="mt-2 text-xs bg-blue-100 dark:bg-blue-800/30 p-2 rounded whitespace-pre-wrap break-words overflow-hidden text-blue-900 dark:text-blue-100">
+                                <pre className="mt-2 text-xs bg-gray-100 dark:bg-gray-800/30 p-2 rounded whitespace-pre-wrap break-words overflow-hidden text-gray-700 dark:text-gray-300">
                                   {message.toolInput}
                                 </pre>
                               </details>
@@ -412,11 +468,11 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                         const filename = input.file_path.split('/').pop();
 
                         return (
-                          <div className="mt-2 text-sm text-blue-700 dark:text-blue-300">
+                          <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
                             Read{' '}
                             <button
                               onClick={() => onFileOpen && onFileOpen(input.file_path)}
-                              className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 underline font-mono"
+                              className="text-blue-600 dark:text-blue-400 hover:text-gray-600 dark:hover:text-gray-300 underline font-mono"
                             >
                               {filename}
                             </button>
@@ -437,7 +493,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                         const planContent = input.plan.replace(/\\n/g, '\n');
                         return (
                           <details className="mt-2" open={autoExpandTools}>
-                            <summary className="text-sm text-blue-700 dark:text-blue-300 cursor-pointer hover:text-blue-800 dark:hover:text-blue-200 flex items-center gap-2">
+                            <summary className="text-sm text-gray-600 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300 flex items-center gap-2">
                               <svg className="w-4 h-4 transition-transform details-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                               </svg>
@@ -457,13 +513,13 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                   // Regular tool input display for other tools
                   return (
                     <details className="mt-2" open={autoExpandTools}>
-                      <summary className="text-sm text-blue-700 dark:text-blue-300 cursor-pointer hover:text-blue-800 dark:hover:text-blue-200 flex items-center gap-2">
+                      <summary className="text-sm text-gray-600 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300 flex items-center gap-2">
                         <svg className="w-4 h-4 transition-transform details-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                         </svg>
                         View input parameters
                       </summary>
-                      <pre className="mt-2 text-xs bg-blue-100 dark:bg-blue-800/30 p-2 rounded whitespace-pre-wrap break-words overflow-hidden text-blue-900 dark:text-blue-100">
+                      <pre className="mt-2 text-xs bg-gray-100 dark:bg-gray-800/30 p-2 rounded whitespace-pre-wrap break-words overflow-hidden text-gray-700 dark:text-gray-300">
                         {message.toolInput}
                       </pre>
                     </details>
@@ -667,7 +723,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                               </div>
                               <button
                                 onClick={() => onFileOpen && onFileOpen(fileEditMatch[1])}
-                                className="text-xs font-mono bg-green-100 dark:bg-green-800/30 px-2 py-1 rounded text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 underline cursor-pointer"
+                                className="text-xs font-mono bg-green-100 dark:bg-green-800/30 px-2 py-1 rounded text-blue-600 dark:text-blue-400 hover:text-gray-600 dark:hover:text-gray-300 underline cursor-pointer"
                               >
                                 {fileEditMatch[1]}
                               </button>
@@ -685,7 +741,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                               </div>
                               <button
                                 onClick={() => onFileOpen && onFileOpen(fileCreateMatch[1])}
-                                className="text-xs font-mono bg-green-100 dark:bg-green-800/30 px-2 py-1 rounded text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 underline cursor-pointer"
+                                className="text-xs font-mono bg-green-100 dark:bg-green-800/30 px-2 py-1 rounded text-blue-600 dark:text-blue-400 hover:text-gray-600 dark:hover:text-gray-300 underline cursor-pointer"
                               >
                                 {fileCreateMatch[1]}
                               </button>
@@ -845,11 +901,11 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                   if (input.file_path) {
                     const filename = input.file_path.split('/').pop();
                     return (
-                      <div className="bg-blue-50 dark:bg-blue-900/20 border-l-2 border-blue-300 dark:border-blue-600 pl-3 py-1 mb-2 text-sm text-blue-700 dark:text-blue-300">
+                      <div className="bg-gray-50 dark:bg-gray-900/20 border-l-2 border-gray-300 dark:border-gray-600 pl-3 py-1 mb-2 text-sm text-gray-600 dark:text-gray-400">
                         📖 Read{' '}
                         <button
                           onClick={() => onFileOpen && onFileOpen(input.file_path)}
-                          className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 underline font-mono"
+                          className="text-blue-600 dark:text-blue-400 hover:text-gray-600 dark:hover:text-gray-300 underline font-mono"
                         >
                           {filename}
                         </button>
@@ -858,7 +914,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                   }
                 } catch (e) {
                   return (
-                    <div className="bg-blue-50 dark:bg-blue-900/20 border-l-2 border-blue-300 dark:border-blue-600 pl-3 py-1 mb-2 text-sm text-blue-700 dark:text-blue-300">
+                    <div className="bg-gray-50 dark:bg-gray-900/20 border-l-2 border-gray-300 dark:border-gray-600 pl-3 py-1 mb-2 text-sm text-gray-600 dark:text-gray-400">
                       📖 Read file
                     </div>
                   );
@@ -871,8 +927,8 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                   const input = JSON.parse(message.toolInput);
                   if (input.todos && Array.isArray(input.todos)) {
                     return (
-                      <div className="bg-blue-50 dark:bg-blue-900/20 border-l-2 border-blue-300 dark:border-blue-600 pl-3 py-1 mb-2">
-                        <div className="text-sm text-blue-700 dark:text-blue-300 mb-2">
+                      <div className="bg-gray-50 dark:bg-gray-900/20 border-l-2 border-gray-300 dark:border-gray-600 pl-3 py-1 mb-2">
+                        <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
                           📝 Update todo list
                         </div>
                         <TodoList todos={input.todos} />
@@ -881,7 +937,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                   }
                 } catch (e) {
                   return (
-                    <div className="bg-blue-50 dark:bg-blue-900/20 border-l-2 border-blue-300 dark:border-blue-600 pl-3 py-1 mb-2 text-sm text-blue-700 dark:text-blue-300">
+                    <div className="bg-gray-50 dark:bg-gray-900/20 border-l-2 border-gray-300 dark:border-gray-600 pl-3 py-1 mb-2 text-sm text-gray-600 dark:text-gray-400">
                       📝 Update todo list
                     </div>
                   );
@@ -889,7 +945,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
               })()
             ) : message.isToolUse && message.toolName === 'TodoRead' ? (
               // Simple TodoRead tool indicator
-              <div className="bg-blue-50 dark:bg-blue-900/20 border-l-2 border-blue-300 dark:border-blue-600 pl-3 py-1 mb-2 text-sm text-blue-700 dark:text-blue-300">
+              <div className="bg-gray-50 dark:bg-gray-900/20 border-l-2 border-gray-300 dark:border-gray-600 pl-3 py-1 mb-2 text-sm text-gray-600 dark:text-gray-400">
                 📋 Read todo list
               </div>
             ) : (
