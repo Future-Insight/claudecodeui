@@ -1,17 +1,17 @@
-import React, { useState, useEffect, useRef, memo } from 'react';
+import { useState, useEffect, useRef, memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import TodoList from './TodoList';
 import { formatUsageLimitText } from '../utils/chatUtils';
 
 
-export const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, onShowSettings, autoExpandTools, showRawParameters }) => {
+export const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, autoExpandTools, showRawParameters }) => {
   const isGrouped = prevMessage && prevMessage.type === message.type &&
     prevMessage.type === 'assistant' &&
     !prevMessage.isToolUse && !message.isToolUse;
-  const messageRef = React.useRef(null);
-  const [isExpanded, setIsExpanded] = React.useState(false);
-  const [isUserExpanded, setIsUserExpanded] = React.useState(false);
-  React.useEffect(() => {
+  const messageRef = useRef(null);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [isUserExpanded, setIsUserExpanded] = useState(false);
+  useEffect(() => {
     if (!autoExpandTools || !messageRef.current || !message.isToolUse) return;
 
     const observer = new IntersectionObserver(
@@ -119,15 +119,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
         <div className="w-full">
           {!isGrouped && (
             <div className="flex items-center space-x-2 mb-1">
-              {message.type === 'error' ? (
-                <div className="w-8 h-8 bg-red-600 rounded-full flex items-center justify-center text-white text-sm flex-shrink-0">
-                  !
-                </div>
-              ) : message.type === 'tool' ? (
-                <div className="w-8 h-8 bg-gray-600 dark:bg-gray-700 rounded-full flex items-center justify-center text-white text-sm flex-shrink-0">
-                  🔧
-                </div>
-              ) : null}
+
               <div className="text-sm font-medium text-gray-900 dark:text-white flex items-center gap-2">
                 <span
                   className={import.meta.env.DEV ? 'cursor-pointer hover:text-blue-600 dark:hover:text-blue-400' : ''}
@@ -154,37 +146,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
 
             {message.isToolUse && !['Read', 'TodoWrite', 'TodoRead'].includes(message.toolName) ? (
               <div className="bg-gray-50 dark:bg-gray-900/20 border border-gray-200 dark:border-gray-700 rounded-lg p-2 mb-1">
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-2">
-                    <div className="w-5 h-5 bg-gray-500 rounded flex items-center justify-center">
-                      <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                    </div>
-                    <span className="font-medium text-gray-700 dark:text-gray-300">
-                      Using {message.toolName}
-                    </span>
-                    <span className="text-xs text-gray-500 dark:text-gray-400 font-mono">
-                      {message.toolId}
-                    </span>
-                  </div>
-                  {onShowSettings && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onShowSettings();
-                      }}
-                      className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                      title="Tool Settings"
-                    >
-                      <svg className="w-4 h-4 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
+
                 {message.toolInput && message.toolName === 'Edit' && (() => {
                   try {
                     const input = JSON.parse(message.toolInput);
@@ -261,6 +223,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                     }
                   } catch (e) {
                     // Fall back to raw display if parsing fails
+                    console.error('Failed to parse tool input for Edit:', e);
                   }
                   return (
                     <details className="mt-2" open={autoExpandTools}>
@@ -402,13 +365,15 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                   if (message.toolName === 'Bash') {
                     try {
                       const input = JSON.parse(message.toolInput);
+
                       return (
                         <details className="mt-2" open={autoExpandTools}>
                           <summary className="text-sm text-gray-600 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300 flex items-center gap-2">
                             <svg className="w-4 h-4 transition-transform details-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                             </svg>
-                            Running command
+                            {message.toolName} {input.command ? `- ${input.command}` : ''}
+
                           </summary>
                           <div className="mt-3 space-y-2">
                             <div className="bg-gray-900 dark:bg-gray-950 text-gray-100 rounded-lg p-3 font-mono text-sm">
@@ -479,10 +444,11 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                         return (
                           <details className="mt-2" open={autoExpandTools}>
                             <summary className="text-sm text-gray-600 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300 flex items-center gap-2">
+
+                              📋 View implementation plan
                               <svg className="w-4 h-4 transition-transform details-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                               </svg>
-                              📋 View implementation plan
                             </summary>
                             <div className="mt-3 prose prose-sm max-w-none dark:prose-invert">
                               <ReactMarkdown>{planContent}</ReactMarkdown>
@@ -496,13 +462,29 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                   }
 
                   // Regular tool input display for other tools
+                  let toolNameExpanded = message.toolName;
+                  if (message.toolInput) {
+                    try {
+                      const input = JSON.parse(message.toolInput);
+                      if (message.toolName === 'Grep' && input.pattern) {
+                        toolNameExpanded += ` ${input.pattern}`;
+                      } else if (message.toolName === 'Glob' && input.pattern) {
+                        toolNameExpanded += ` ${input.pattern}`;
+                      } else if (input.path) {
+                        toolNameExpanded += ` ${input.path}`;
+                      }
+                    } catch (e) {
+                      // Ignore parsing errors
+                    }
+                  }
                   return (
                     <details className="mt-2" open={autoExpandTools}>
                       <summary className="text-sm text-gray-600 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300 flex items-center gap-2">
                         <svg className="w-4 h-4 transition-transform details-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                         </svg>
-                        View input parameters
+                        {toolNameExpanded}
+
                       </summary>
                       <pre className="mt-2 text-xs bg-gray-100 dark:bg-gray-800/30 p-2 rounded whitespace-pre-wrap break-words overflow-hidden text-gray-700 dark:text-gray-300">
                         {message.toolInput}
@@ -513,32 +495,14 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
 
                 {/* Tool Result Section */}
                 {message.toolResult && (
-                  <div className="mt-2 border-t border-blue-200 dark:border-blue-700 pt-2">
-                    <div className="flex items-center gap-2 mb-1">
-                      <div className={`w-4 h-4 rounded flex items-center justify-center ${message.isError
-                        ? 'bg-red-500'
-                        : 'bg-green-500'
-                        }`}>
-                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          {message.isError ? (
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          ) : (
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          )}
-                        </svg>
-                      </div>
-                      <span className={`text-sm font-medium ${message.isError
-                        ? 'text-red-700 dark:text-red-300'
-                        : 'text-green-700 dark:text-green-300'
-                        }`}>
-                        {message.isError ? 'Tool Error' : 'Tool Result'}
-                      </span>
-                    </div>
-
+                  <div className={`mt-2 border-t  pt-2 ${message.isError
+                    ? 'border-red-200 dark:border-red-700'
+                    : 'border-blue-200 dark:border-blue-700'}`}>
                     <div className={`text-sm ${message.isError
                       ? 'text-red-800 dark:text-red-200'
                       : 'text-green-800 dark:text-green-200'
                       }`}>
+
                       {(() => {
                         const content = String(message.toolResult || '');
 
@@ -706,12 +670,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                               <div className="flex items-center gap-2 mb-1">
                                 <span className="font-medium">File updated successfully</span>
                               </div>
-                              <button
-                                onClick={() => onFileOpen && onFileOpen(fileEditMatch[1])}
-                                className="text-xs font-mono bg-green-100 dark:bg-green-800/30 px-2 py-1 rounded text-blue-600 dark:text-blue-400 hover:text-gray-600 dark:hover:text-gray-300 underline cursor-pointer"
-                              >
-                                {fileEditMatch[1]}
-                              </button>
+
                             </div>
                           );
                         }
@@ -1005,8 +964,9 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
 
           </div>
         </div>
-      )}
-    </div>
+      )
+      }
+    </div >
   );
 });
 

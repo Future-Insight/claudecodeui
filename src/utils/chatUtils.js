@@ -109,39 +109,41 @@ export const safeLocalStorage = {
 };
 
 // Calculate diff between original and new content
-export function calculateDiff(original, modified) {
-  if (!original || !modified) return { additions: 0, deletions: 0 };
+export function calculateDiff(oldStr, newStr) {
+  const oldLines = oldStr.split('\n');
+  const newLines = newStr.split('\n');
 
-  const originalLines = original.split('\n');
-  const modifiedLines = modified.split('\n');
+  // Simple diff algorithm - find common lines and differences
+  const diffLines = [];
+  let oldIndex = 0;
+  let newIndex = 0;
 
-  // Simple line-based diff calculation
-  const maxLength = Math.max(originalLines.length, modifiedLines.length);
-  let additions = 0;
-  let deletions = 0;
+  while (oldIndex < oldLines.length || newIndex < newLines.length) {
+    const oldLine = oldLines[oldIndex];
+    const newLine = newLines[newIndex];
 
-  for (let i = 0; i < maxLength; i++) {
-    const origLine = originalLines[i] || '';
-    const modLine = modifiedLines[i] || '';
-
-    if (i >= originalLines.length) {
-      additions++;
-    } else if (i >= modifiedLines.length) {
-      deletions++;
-    } else if (origLine !== modLine) {
-      if (origLine.length === 0) {
-        additions++;
-      } else if (modLine.length === 0) {
-        deletions++;
-      } else {
-        // Line modified - count as both addition and deletion
-        additions++;
-        deletions++;
-      }
+    if (oldIndex >= oldLines.length) {
+      // Only new lines remaining
+      diffLines.push({ type: 'added', content: newLine, lineNum: newIndex + 1 });
+      newIndex++;
+    } else if (newIndex >= newLines.length) {
+      // Only old lines remaining
+      diffLines.push({ type: 'removed', content: oldLine, lineNum: oldIndex + 1 });
+      oldIndex++;
+    } else if (oldLine === newLine) {
+      // Lines are the same - skip in diff view (or show as context)
+      oldIndex++;
+      newIndex++;
+    } else {
+      // Lines are different
+      diffLines.push({ type: 'removed', content: oldLine, lineNum: oldIndex + 1 });
+      diffLines.push({ type: 'added', content: newLine, lineNum: newIndex + 1 });
+      oldIndex++;
+      newIndex++;
     }
   }
 
-  return { additions, deletions };
+  return diffLines;
 }
 
 // Flatten file tree for display
