@@ -45,8 +45,8 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
     >
       {message.type === 'user' ? (
         /* User message with frame and background */
-        <div className="w-full mb-4">
-          <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50 rounded-lg p-3 shadow-sm">
+        <div className="w-full mb-2">
+          <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50 rounded-lg p-2 shadow-sm">
             <div className="flex items-start">
               {/* Header section - simplified */}
               <div className="flex-shrink-0  pr-3">
@@ -153,8 +153,8 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
           <div className="w-full">
 
             {message.isToolUse && !['Read', 'TodoWrite', 'TodoRead'].includes(message.toolName) ? (
-              <div className="bg-gray-50 dark:bg-gray-900/20 border border-gray-200 dark:border-gray-700 rounded-lg p-2 sm:p-3 mb-2">
-                <div className="flex items-center justify-between mb-2">
+              <div className="bg-gray-50 dark:bg-gray-900/20 border border-gray-200 dark:border-gray-700 rounded-lg p-2 mb-1">
+                <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-2">
                     <div className="w-5 h-5 bg-gray-500 rounded flex items-center justify-center">
                       <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -513,8 +513,8 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
 
                 {/* Tool Result Section */}
                 {message.toolResult && (
-                  <div className="mt-3 border-t border-blue-200 dark:border-blue-700 pt-3">
-                    <div className="flex items-center gap-2 mb-2">
+                  <div className="mt-2 border-t border-blue-200 dark:border-blue-700 pt-2">
+                    <div className="flex items-center gap-2 mb-1">
                       <div className={`w-4 h-4 rounded flex items-center justify-center ${message.isError
                         ? 'bg-red-500'
                         : 'bg-green-500'
@@ -556,7 +556,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                               // For TodoWrite success messages, we don't have the data in the result
                               return (
                                 <div>
-                                  <div className="flex items-center gap-2 mb-2">
+                                  <div className="flex items-center gap-2 mb-1">
                                     <span className="font-medium">Todo list has been updated successfully</span>
                                   </div>
                                 </div>
@@ -703,7 +703,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                         if (fileEditMatch) {
                           return (
                             <div>
-                              <div className="flex items-center gap-2 mb-2">
+                              <div className="flex items-center gap-2 mb-1">
                                 <span className="font-medium">File updated successfully</span>
                               </div>
                               <button
@@ -721,7 +721,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                         if (fileCreateMatch) {
                           return (
                             <div>
-                              <div className="flex items-center gap-2 mb-2">
+                              <div className="flex items-center gap-2 mb-1">
                                 <span className="font-medium">File created successfully</span>
                               </div>
                               <button
