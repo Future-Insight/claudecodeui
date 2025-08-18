@@ -150,7 +150,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                 {message.toolInput && message.toolName === 'Edit' && (() => {
                   try {
                     const input = JSON.parse(message.toolInput);
-                    if (input.file_path && input.old_string && input.new_string) {
+                    if (input.file_path && input.old_string) {
                       return (
                         <details className="mt-2" open={autoExpandTools}>
                           <summary className="text-sm text-gray-600 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300 flex items-center gap-2">
@@ -228,7 +228,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                   return (
                     <details className="mt-2" open={autoExpandTools}>
                       <summary className="text-sm text-gray-600 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">
-                        View input parameters
+                        {message.toolName}
                       </summary>
                       <pre className="mt-2 text-xs bg-gray-100 dark:bg-gray-800/30 p-2 rounded whitespace-pre-wrap break-words overflow-hidden text-gray-700 dark:text-gray-300">
                         {message.toolInput}
