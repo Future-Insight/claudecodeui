@@ -51,7 +51,7 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
   const [messagesOffset, setMessagesOffset] = useState(0);
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
   const [totalMessages, setTotalMessages] = useState(0);
-  const MESSAGES_PER_PAGE = 20;
+  const MESSAGES_PER_PAGE = 50;
   const [isSystemSessionChange, setIsSystemSessionChange] = useState(false);
   const [permissionMode, setPermissionMode] = useState('default');
   const [attachedImages, setAttachedImages] = useState([]);
