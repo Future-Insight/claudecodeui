@@ -695,9 +695,6 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                                 </svg>
                                 <span className="font-medium">File written successfully</span>
                               </div>
-                              <p className="text-xs mt-1 text-green-600 dark:text-green-400">
-                                The file content is displayed in the diff view above
-                              </p>
                             </div>
                           );
                         }
