@@ -133,7 +133,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                   } : undefined}
                   title={import.meta.env.DEV ? '点击复制消息JSON' : ''}
                 >
-                  {message.type === 'error' ? 'Error' : message.type === 'tool' ? 'Tool' : 'Claude'}
+                  {message.type === 'error' ? 'Error' : message.type === 'tool' ? 'Tool' : '●'}
                 </span>
                 <span className="text-xs text-gray-500 dark:text-gray-400">
                   {new Date(message.timestamp).toLocaleTimeString()}

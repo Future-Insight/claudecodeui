@@ -5,7 +5,7 @@ import reactHooksPlugin from 'eslint-plugin-react-hooks';
 export default [
     js.configs.recommended,
     {
-        files: ['src/**/*.{js,jsx,ts,tsx}'],
+        files: ['src/**/*.{js,jsx,ts,tsx}', 'server/**/*.{js,jsx,ts,tsx}',],
         languageOptions: {
             ecmaVersion: 'latest',
             sourceType: 'module',
