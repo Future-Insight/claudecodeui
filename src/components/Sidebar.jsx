@@ -836,16 +836,11 @@ function Sidebar({
                         isStarred && !isSelected && "bg-yellow-50/50 dark:bg-yellow-900/10 hover:bg-yellow-100/50 dark:hover:bg-yellow-900/20"
                       )}
                       onClick={() => {
-                        // Desktop behavior: select project and toggle
-                        if (selectedProject?.name !== project.name) {
-                          onProjectSelect(project);
-                        }
+                        // 点击项目文件夹时只展开/收起，不切换session
                         toggleProject(project.name);
                       }}
                       onTouchEnd={handleTouchClick(() => {
-                        if (selectedProject?.name !== project.name) {
-                          onProjectSelect(project);
-                        }
+                        // 点击项目文件夹时只展开/收起，不切换session
                         toggleProject(project.name);
                       })}
                     >
@@ -1021,7 +1016,7 @@ function Sidebar({
                               <div
                                 className={cn(
                                   "p-2 mx-3 my-0.5 rounded-md bg-card border active:scale-[0.98] transition-all duration-150 relative",
-                                  selectedSession?.id === session.id ? "bg-primary/5 border-primary/20" :
+                                  selectedSession?.id === session.id ? "bg-primary/15 border-primary/40 shadow-md ring-1 ring-primary/20" :
                                   isActive ? "border-green-500/30 bg-green-50/5 dark:bg-green-900/5" : "border-border/30"
                                 )}
                                 onClick={() => {
@@ -1036,7 +1031,7 @@ function Sidebar({
                                 <div className="flex items-center gap-2">
                                   <div className={cn(
                                     "w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0",
-                                    selectedSession?.id === session.id ? "bg-primary/10" : "bg-muted/50"
+                                    selectedSession?.id === session.id ? "bg-primary/20 ring-1 ring-primary/30" : "bg-muted/50"
                                   )}>
                                     <ClaudeLogo className="w-3 h-3" />
                                   </div>
@@ -1083,7 +1078,7 @@ function Sidebar({
                                 variant="ghost"
                                 className={cn(
                                   "w-full justify-start p-2 h-auto font-normal text-left hover:bg-accent/50 transition-colors duration-200",
-                                  selectedSession?.id === session.id && "bg-accent text-accent-foreground"
+                                  selectedSession?.id === session.id && "bg-primary/15 text-primary-foreground border border-primary/30 shadow-sm ring-1 ring-primary/20"
                                 )}
                                 onClick={() => onSessionSelect(session)}
                                 onTouchEnd={handleTouchClick(() => onSessionSelect(session))}
@@ -1233,7 +1228,7 @@ function Sidebar({
                       {/* New Session Button */}
                       <div className="md:hidden px-3 pb-2">
                         <button
-                          className="w-full h-8 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md flex items-center justify-center gap-2 font-medium text-xs active:scale-[0.98] transition-all duration-150"
+                          className="w-full h-8 bg-muted/50 hover:bg-muted/70 text-muted-foreground hover:text-blue-600 dark:hover:text-blue-400 rounded-md flex items-center justify-center gap-2 font-normal text-xs active:scale-[0.98] transition-all duration-150 border border-border/30"
                           onClick={() => {
                             onProjectSelect(project);
                             onNewSession(project);
@@ -1245,9 +1240,9 @@ function Sidebar({
                       </div>
                       
                       <Button
-                        variant="default"
+                        variant="ghost"
                         size="sm"
-                        className="hidden md:flex w-full justify-start gap-2 mt-1 h-8 text-xs font-medium bg-primary hover:bg-primary/90 text-primary-foreground transition-colors"
+                        className="hidden md:flex w-full justify-center gap-2 mt-1 h-8 text-xs font-normal text-muted-foreground hover:bg-muted/50 transition-colors border border-border/30 hover:text-blue-600 dark:hover:text-blue-400"
                         onClick={() => onNewSession(project)}
                       >
                         <Plus className="w-3 h-3" />
