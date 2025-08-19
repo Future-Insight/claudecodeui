@@ -1219,6 +1219,16 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
               })}
             </>
           )}
+          
+          {/* Loading overlay for session switching */}
+          {isLoadingSessionMessages && chatMessages.length > 0 && (
+            <div className="absolute inset-0 bg-white/70 dark:bg-gray-900/70 flex items-center justify-center z-50">
+              <div className="flex items-center justify-center space-x-2 bg-white dark:bg-gray-800 px-4 py-3 rounded-lg shadow-lg">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+                <p className="text-gray-700 dark:text-gray-300">加载中...</p>
+              </div>
+            </div>
+          )}
 
           {isLoading && (
             <div className="chat-message assistant">
