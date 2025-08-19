@@ -33,7 +33,6 @@ import { promises as fsPromises } from 'fs';
 import { spawn } from 'child_process';
 import os from 'os';
 import pty from 'node-pty';
-import fetch from 'node-fetch';
 import mime from 'mime-types';
 
 import { getProjects, getSessions, getSessionMessages, renameProject, deleteSession, deleteProject, addProjectManually, extractProjectDirectory, clearProjectDirectoryCache } from './projects.js';
@@ -41,6 +40,7 @@ import { spawnClaude, abortClaudeSession } from './claude-cli.js';
 import gitRoutes from './routes/git.js';
 import authRoutes from './routes/auth.js';
 import mcpRoutes from './routes/mcp.js';
+import previewRoutes from './routes/preview.js';
 import { initializeDatabase } from './database/db.js';
 import { validateApiKey, authenticateToken, authenticateWebSocket } from './middleware/auth.js';
 
@@ -174,6 +174,9 @@ app.use('/api/git', authenticateToken, gitRoutes);
 
 // MCP API Routes (protected)
 app.use('/api/mcp', authenticateToken, mcpRoutes);
+
+// Preview API Routes (protected)
+app.use('/api', authenticateToken, previewRoutes);
 
 
 // Static files served after API routes
@@ -769,6 +772,52 @@ app.post('/api/projects/:projectName/upload-images', authenticateToken, async (r
         console.error('Error in image upload endpoint:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
+});
+
+// Preview endpoints - simplified for direct URL access
+app.get('/api/preview/:projectName/url', authenticateToken, async (req, res) => {
+  try {
+    const { projectName } = req.params;
+    const projectPath = await extractProjectDirectory(projectName);
+    
+    // 读取项目配置获取端口
+    const configPath = path.join(projectPath, '.claudeui.json');
+    let config;
+    try {
+      const configData = await fsPromises.readFile(configPath, 'utf8');
+      config = JSON.parse(configData);
+    } catch (error) {
+      return res.status(404).json({ error: 'No development server configuration found' });
+    }
+    
+    if (!config || !config.dev || !config.dev.port) {
+      return res.status(404).json({ error: 'No development server configuration found' });
+    }
+    
+    // 获取全局预览配置
+    const globalConfigPath = path.join(os.homedir(), '.claude', 'preview-config.json');
+    let globalConfig = { host: 'localhost', openInNewTab: true };
+    try {
+      const globalConfigData = await fsPromises.readFile(globalConfigPath, 'utf8');
+      globalConfig = { ...globalConfig, ...JSON.parse(globalConfigData) };
+    } catch (error) {
+      // 使用默认配置
+    }
+    
+    const previewUrl = `http://${globalConfig.host}:${config.dev.port}`;
+    
+    res.json({
+      success: true,
+      url: previewUrl,
+      port: config.dev.port,
+      host: globalConfig.host,
+      openInNewTab: globalConfig.openInNewTab
+    });
+    
+  } catch (error) {
+    console.error('Preview URL error:', error);
+    res.status(500).json({ error: 'Failed to get preview URL', details: error.message });
+  }
 });
 
 // Serve React app for all other routes

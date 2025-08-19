@@ -1,0 +1,6 @@
+{
+  "dev": {
+    "port": 5174,
+    "command": "npm run client"
+  }
+}

@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { GitBranch, GitCommit, Plus, Minus, RefreshCw, Check, X, ChevronDown, ChevronRight, Info, History, FileText, Sparkles, Download, RotateCcw, Trash2, AlertTriangle, Upload } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { GitBranch, GitCommit, Plus, RefreshCw, Check, ChevronDown, ChevronRight, Info, History, FileText, Sparkles, Download, Trash2, AlertTriangle, Upload } from 'lucide-react';
 import { authenticatedFetch } from '../utils/api';
 
 function GitPanel({ selectedProject, isMobile }) {
@@ -127,6 +127,8 @@ function GitPanel({ selectedProject, isMobile }) {
       setRemoteStatus(null);
     }
   };
+
+
 
   const switchBranch = async (branchName) => {
     try {
@@ -351,7 +353,7 @@ function GitPanel({ selectedProject, isMobile }) {
   const confirmAndExecute = async () => {
     if (!confirmAction) return;
 
-    const { type, file, message } = confirmAction;
+    const { type, file } = confirmAction;
     setConfirmAction(null);
 
     try {
@@ -1288,6 +1290,7 @@ function GitPanel({ selectedProject, isMobile }) {
           </div>
         </div>
       )}
+
     </div>
   );
 }

@@ -17,6 +17,7 @@ import FileTree from './FileTree';
 import CodeEditor from './CodeEditor';
 import Shell from './Shell';
 import GitPanel from './GitPanel';
+import ProjectPreview from './ProjectPreview';
 import ErrorBoundary from './ErrorBoundary';
 import ClaudeLogo from './ClaudeLogo';
 
@@ -182,7 +183,7 @@ function MainContent({
                 ) : (
                   <div>
                     <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">
-                      {activeTab === 'files' ? 'Project Files' : activeTab === 'git' ? 'Source Control' : 'Project'}
+                      {activeTab === 'files' ? 'Project Files' : activeTab === 'git' ? 'Git' : activeTab === 'preview' ? '预览' : 'Project'}
                     </h2>
                     <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
                       {selectedProject.displayName}
@@ -253,10 +254,10 @@ function MainContent({
                   <svg className="w-3 sm:w-3.5 h-3 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
-                  <span className="hidden sm:inline">Source Control</span>
+                  <span className="hidden sm:inline">Git</span>
                 </span>
               </button>
-               {/* <button
+              <button
                 onClick={() => setActiveTab('preview')}
                 className={`relative px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all duration-200 ${
                   activeTab === 'preview'
@@ -268,9 +269,9 @@ function MainContent({
                   <svg className="w-3 sm:w-3.5 h-3 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
                   </svg>
-                  <span className="hidden sm:inline">Preview</span>
+                  <span className="hidden sm:inline">预览</span>
                 </span>
-              </button> */}
+              </button>
             </div>
           </div>
         </div>
@@ -314,30 +315,10 @@ function MainContent({
           <GitPanel selectedProject={selectedProject} isMobile={isMobile} />
         </div>
         <div className={`h-full overflow-hidden ${activeTab === 'preview' ? 'block' : 'hidden'}`}>
-          {/* <LivePreviewPanel
+          <ProjectPreview 
             selectedProject={selectedProject}
-            serverStatus={serverStatus}
-            serverUrl={serverUrl}
-            availableScripts={availableScripts}
-            onStartServer={(script) => {
-              sendMessage({
-                type: 'server:start',
-                projectPath: selectedProject?.fullPath,
-                script: script
-              });
-            }}
-            onStopServer={() => {
-              sendMessage({
-                type: 'server:stop',
-                projectPath: selectedProject?.fullPath
-              });
-            }}
-            onScriptSelect={setCurrentScript}
-            currentScript={currentScript}
             isMobile={isMobile}
-            serverLogs={serverLogs}
-            onClearLogs={() => setServerLogs([])}
-          /> */}
+          />
         </div>
       </div>
 
