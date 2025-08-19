@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { GitBranch, GitCommit, Plus, Minus, RefreshCw, Check, X, ChevronDown, ChevronRight, Info, History, FileText, Mic, MicOff, Sparkles, Download, RotateCcw, Trash2, AlertTriangle, Upload } from 'lucide-react';
-import { MicButton } from './MicButton.jsx';
+import { GitBranch, GitCommit, Plus, Minus, RefreshCw, Check, X, ChevronDown, ChevronRight, Info, History, FileText, Sparkles, Download, RotateCcw, Trash2, AlertTriangle, Upload } from 'lucide-react';
 import { authenticatedFetch } from '../utils/api';
 
 function GitPanel({ selectedProject, isMobile }) {
@@ -992,13 +991,6 @@ function GitPanel({ selectedProject, isMobile }) {
                             <Sparkles className="w-4 h-4" />
                           )}
                         </button>
-                        <div style={{ display: 'none' }}>
-                          <MicButton
-                            onTranscript={(transcript) => setCommitMessage(transcript)}
-                            mode="default"
-                            className="p-1.5"
-                          />
-                        </div>
                       </div>
                     </div>
                     <div className="flex items-center justify-between mt-2">

@@ -157,20 +157,10 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                             <svg className="w-4 h-4 transition-transform details-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                             </svg>
-                            📝 View edit diff for
-                            <button
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                onFileOpen && onFileOpen(input.file_path, {
-                                  old_string: input.old_string,
-                                  new_string: input.new_string
-                                });
-                              }}
-                              className="text-blue-600 dark:text-blue-400 hover:text-gray-600 dark:hover:text-gray-300 underline font-mono"
-                            >
+                            📝  Edit file
+                            <span className='text-blue-600 dark:text-blue-400 underline'>
                               {input.file_path.split('/').pop()}
-                            </button>
+                            </span>
                           </summary>
                           <div className="mt-3">
                             <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">

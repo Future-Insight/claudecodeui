@@ -80,10 +80,4 @@ export const api = {
     }),
   getFiles: (projectName) =>
     authenticatedFetch(`/api/projects/${projectName}/files`),
-  transcribe: (formData) =>
-    authenticatedFetch('/api/transcribe', {
-      method: 'POST',
-      body: formData,
-      headers: {}, // Let browser set Content-Type for FormData
-    }),
 };
