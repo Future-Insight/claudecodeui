@@ -43,7 +43,8 @@ function MainContent({
   autoExpandTools,        // Auto-expand tool accordions
   showRawParameters,      // Show raw parameters in tool accordions
   autoScrollToBottom,     // Auto-scroll to bottom when new messages arrive
-  sendByCtrlEnter         // Send by Ctrl+Enter mode for East Asian language input
+  sendByCtrlEnter,        // Send by Ctrl+Enter mode for East Asian language input
+  projects                // 需要传入projects数组以渲染所有项目的Shell
 }) {
   const [editingFile, setEditingFile] = useState(null);
 
@@ -183,7 +184,10 @@ function MainContent({
                 ) : (
                   <div>
                     <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">
-                      {activeTab === 'files' ? 'Project Files' : activeTab === 'git' ? 'Git' : activeTab === 'preview' ? '预览' : 'Project'}
+                      {activeTab === 'files' ? 'Project Files' : 
+                       activeTab === 'git' ? 'Git' : 
+                       activeTab === 'preview' ? '预览' : 
+                       activeTab.startsWith('shell-') ? 'Shell' : 'Project'}
                     </h2>
                     <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
                       {selectedProject.displayName}
@@ -213,9 +217,9 @@ function MainContent({
                 </span>
               </button>
               <button
-                onClick={() => setActiveTab('shell')}
+                onClick={() => setActiveTab(`shell-${selectedProject.name}`)}
                 className={`relative px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all duration-200 ${
-                  activeTab === 'shell'
+                  activeTab === `shell-${selectedProject.name}`
                     ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
                     : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-gray-700'
                 }`}
@@ -304,13 +308,20 @@ function MainContent({
         <div className={`h-full overflow-hidden ${activeTab === 'files' ? 'block' : 'hidden'}`}>
           <FileTree selectedProject={selectedProject} />
         </div>
-        <div className={`h-full overflow-hidden ${activeTab === 'shell' ? 'block' : 'hidden'}`}>
-          <Shell 
-            selectedProject={selectedProject} 
-            selectedSession={selectedSession}
-            isActive={activeTab === 'shell'}
-          />
-        </div>
+        {/* 为所有项目渲染Shell组件，保持连接状态 */}
+        {projects && projects.map((project) => (
+          <div 
+            key={`shell-container-${project.name}`}
+            className={`h-full overflow-hidden ${activeTab === `shell-${project.name}` ? 'block' : 'hidden'}`}
+          >
+            <Shell 
+              key={`shell-${project.name}`} // 确保每个项目有独立的Shell实例
+              selectedProject={project} 
+              selectedSession={selectedProject && selectedProject.name === project.name ? selectedSession : null}
+              isActive={activeTab === `shell-${project.name}`}
+            />
+          </div>
+        ))}
         <div className={`h-full overflow-hidden ${activeTab === 'git' ? 'block' : 'hidden'}`}>
           <GitPanel selectedProject={selectedProject} isMobile={isMobile} />
         </div>

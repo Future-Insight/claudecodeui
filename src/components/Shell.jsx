@@ -29,6 +29,51 @@ if (typeof document !== 'undefined') {
 // Global store for shell sessions to persist across tab switches
 const shellSessions = new Map();
 
+// Session history storage for better persistence
+const SESSION_HISTORY_KEY = 'claude-shell-history';
+
+// Helper functions for session history
+const saveSessionHistory = (sessionKey, data) => {
+  try {
+    const history = JSON.parse(localStorage.getItem(SESSION_HISTORY_KEY) || '{}');
+    history[sessionKey] = {
+      ...data,
+      timestamp: Date.now()
+    };
+    localStorage.setItem(SESSION_HISTORY_KEY, JSON.stringify(history));
+  } catch (error) {
+    console.warn('Failed to save session history:', error);
+  }
+};
+
+const getSessionHistory = (sessionKey) => {
+  try {
+    const history = JSON.parse(localStorage.getItem(SESSION_HISTORY_KEY) || '{}');
+    return history[sessionKey] || null;
+  } catch (error) {
+    console.warn('Failed to get session history:', error);
+    return null;
+  }
+};
+
+const clearOldSessionHistory = () => {
+  try {
+    const history = JSON.parse(localStorage.getItem(SESSION_HISTORY_KEY) || '{}');
+    const now = Date.now();
+    const oneDay = 24 * 60 * 60 * 1000; // 24 hours
+    
+    const cleaned = {};
+    for (const [key, value] of Object.entries(history)) {
+      if (now - value.timestamp < oneDay) {
+        cleaned[key] = value;
+      }
+    }
+    localStorage.setItem(SESSION_HISTORY_KEY, JSON.stringify(cleaned));
+  } catch (error) {
+    console.warn('Failed to clear old session history:', error);
+  }
+};
+
 function Shell({ selectedProject, selectedSession, isActive }) {
   const terminalRef = useRef(null);
   const terminal = useRef(null);
@@ -39,16 +84,17 @@ function Shell({ selectedProject, selectedSession, isActive }) {
   const [isRestarting, setIsRestarting] = useState(false);
   const [lastSessionId, setLastSessionId] = useState(null);
   const [isConnecting, setIsConnecting] = useState(false);
-  const [tmuxStatus, setTmuxStatus] = useState({ exists: false, attached: false });
-  const [isClosingTmux, setIsClosingTmux] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [sessionHistory, setSessionHistory] = useState(null);
+  const [shellStatus, setShellStatus] = useState({ exists: false });
 
-  // Check tmux status for current session
-  const checkTmuxStatus = async () => {
-    if (!selectedSession?.id) return;
+  // Check shell session status for current project
+  const checkShellStatus = async () => {
+    if (!selectedProject) return;
     
     try {
       const token = localStorage.getItem('auth-token');
-      const response = await fetch(`/api/sessions/${selectedSession.id}/tmux-status`, {
+      const response = await fetch(`/api/projects/${selectedProject.name}/shell-status`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -56,22 +102,21 @@ function Shell({ selectedProject, selectedSession, isActive }) {
       
       if (response.ok) {
         const status = await response.json();
-        setTmuxStatus(status);
-        console.log('Tmux status:', status);
+        setShellStatus(status);
+        console.log('Shell status:', status);
       }
     } catch (error) {
-      console.error('Failed to check tmux status:', error);
+      console.error('Failed to check shell status:', error);
     }
   };
 
-  // Close tmux session
-  const closeTmuxSession = async () => {
-    if (!selectedSession?.id || isClosingTmux) return;
+  // Kill shell session for current project
+  const killShellSession = async () => {
+    if (!selectedProject) return;
     
-    setIsClosingTmux(true);
     try {
       const token = localStorage.getItem('auth-token');
-      const response = await fetch(`/api/sessions/${selectedSession.id}/tmux`, {
+      const response = await fetch(`/api/projects/${selectedProject.name}/shell`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -79,17 +124,37 @@ function Shell({ selectedProject, selectedSession, isActive }) {
       });
       
       if (response.ok) {
-        console.log('Tmux session closed successfully');
-        await checkTmuxStatus(); // Refresh status
+        console.log('Shell session terminated successfully');
+        await checkShellStatus(); // Refresh status
       } else {
-        console.error('Failed to close tmux session');
+        console.error('Failed to terminate shell session');
       }
     } catch (error) {
-      console.error('Error closing tmux session:', error);
-    } finally {
-      setIsClosingTmux(false);
+      console.error('Error terminating shell session:', error);
     }
   };
+
+  // Toggle fullscreen mode
+  const toggleFullscreen = () => {
+    setIsFullscreen(!isFullscreen);
+    
+    // Fit terminal after fullscreen toggle
+    setTimeout(() => {
+      if (fitAddon.current && terminal.current) {
+        fitAddon.current.fit();
+        // Send updated terminal size to backend after fullscreen toggle
+        if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+          ws.current.send(JSON.stringify({
+            type: 'resize',
+            cols: terminal.current.cols,
+            rows: terminal.current.rows,
+            sessionId: selectedSession?.id
+          }));
+        }
+      }
+    }, 100);
+  };
+
 
   // Connect to shell function
   const connectToShell = () => {
@@ -156,54 +221,45 @@ function Shell({ selectedProject, selectedSession, isActive }) {
     }, 200);
   };
 
-  // Watch for session changes and restart shell
+  // Watch for session changes - but don't disconnect since we use one shell per project
   useEffect(() => {
     const currentSessionId = selectedSession?.id || null;
-    
-    
-    // Disconnect when session changes (user will need to manually reconnect)
-    if (lastSessionId !== null && lastSessionId !== currentSessionId && isInitialized) {
-      
-      // Disconnect from current shell
-      disconnectFromShell();
-      
-      // Clear stored sessions for this project
-      const allKeys = Array.from(shellSessions.keys());
-      allKeys.forEach(key => {
-        if (key.includes(selectedProject.name)) {
-          shellSessions.delete(key);
-        }
-      });
-    }
-    
     setLastSessionId(currentSessionId);
-    
-    // Check tmux status when session changes
-    if (currentSessionId) {
-      checkTmuxStatus();
-    }
-  }, [selectedSession?.id, isInitialized]);
-
-  // Periodically check tmux status
-  useEffect(() => {
-    if (!selectedSession?.id) return;
-
-    const interval = setInterval(checkTmuxStatus, 5000); // Check every 5 seconds
-    return () => clearInterval(interval);
   }, [selectedSession?.id]);
+
+  // Periodically check shell status
+  useEffect(() => {
+    if (!selectedProject) return;
+
+    // 立即检查一次
+    checkShellStatus();
+
+    // 每10秒检查一次状态
+    const interval = setInterval(checkShellStatus, 10000);
+    return () => clearInterval(interval);
+  }, [selectedProject]);
 
   // Initialize terminal when component mounts
   useEffect(() => {
+    // Clean old session history on component mount
+    clearOldSessionHistory();
     
     if (!terminalRef.current || !selectedProject || isRestarting) {
       return;
     }
 
-    // Create session key for this project/session combination
-    const sessionKey = selectedSession?.id || `project-${selectedProject.name}`;
+    // Create session key for this project
+    const sessionKey = `project-${selectedProject.name}`;
     
     // Check if we have an existing session
     const existingSession = shellSessions.get(sessionKey);
+    const historyData = getSessionHistory(sessionKey);
+    
+    // Set session history for display
+    if (historyData && !isConnected) {
+      setSessionHistory(historyData);
+    }
+    
     if (existingSession && !terminal.current) {
       
       try {
@@ -261,6 +317,11 @@ function Shell({ selectedProject, selectedSession, isActive }) {
       convertEol: true,
       scrollback: 10000,
       tabStopWidth: 4,
+      // Enable scrolling and history
+      scrollOnUserInput: true,
+      fastScrollModifier: 'alt',
+      fastScrollSensitivity: 5,
+      scrollSensitivity: 1,
       // Enable full color support
       windowsMode: false,
       macOptionIsMeta: true,
@@ -327,11 +388,11 @@ function Shell({ selectedProject, selectedSession, isActive }) {
       }
     }, 50);
 
-    // Add keyboard shortcuts for copy/paste
+    // Add keyboard shortcuts for copy/paste and scrolling
     terminal.current.attachCustomKeyEventHandler((event) => {
       // Ctrl+C or Cmd+C for copy (when text is selected)
       if ((event.ctrlKey || event.metaKey) && event.key === 'c' && terminal.current.hasSelection()) {
-        document.execCommand('copy');
+        navigator.clipboard.writeText(terminal.current.getSelection());
         return false;
       }
       
@@ -344,9 +405,31 @@ function Shell({ selectedProject, selectedSession, isActive }) {
               data: text
             }));
           }
-        }).catch(err => {
+        }).catch(() => {
           // Failed to read clipboard
         });
+        return false;
+      }
+      
+      // Page Up/Down for scrolling
+      if (event.key === 'PageUp') {
+        terminal.current.scrollToTop();
+        return false;
+      }
+      
+      if (event.key === 'PageDown') {
+        terminal.current.scrollToBottom();
+        return false;
+      }
+      
+      // Shift + Page Up/Down for line-by-line scrolling
+      if (event.shiftKey && event.key === 'ArrowUp') {
+        terminal.current.scrollLines(-1);
+        return false;
+      }
+      
+      if (event.shiftKey && event.key === 'ArrowDown') {
+        terminal.current.scrollLines(1);
         return false;
       }
       
@@ -408,21 +491,31 @@ function Shell({ selectedProject, selectedSession, isActive }) {
       
       // Store session for reuse instead of disposing
       if (terminal.current && selectedProject) {
-        const sessionKey = selectedSession?.id || `project-${selectedProject.name}`;
+        const sessionKey = `project-${selectedProject.name}`;
         
         try {
-          shellSessions.set(sessionKey, {
+          const sessionData = {
             terminal: terminal.current,
             fitAddon: fitAddon.current,
             ws: ws.current,
             isConnected: isConnected
+          };
+          
+          shellSessions.set(sessionKey, sessionData);
+          
+          // Also save to localStorage for persistence across page reloads
+          saveSessionHistory(sessionKey, {
+            projectName: selectedProject.name,
+            projectPath: selectedProject.fullPath || selectedProject.path,
+            isConnected: isConnected,
+            lastActive: Date.now()
           });
           
         } catch (error) {
         }
       }
     };
-  }, [terminalRef.current, selectedProject, selectedSession, isRestarting]);
+  }, [terminalRef.current, selectedProject, isRestarting]);
 
   // Fit terminal when tab becomes active
   useEffect(() => {
@@ -490,6 +583,12 @@ function Shell({ selectedProject, selectedSession, isActive }) {
       ws.current.onopen = () => {
         setIsConnected(true);
         setIsConnecting(false);
+        setSessionHistory(null); // Clear history info when connected
+        
+        // Focus the terminal for keyboard input
+        if (terminal.current) {
+          terminal.current.focus();
+        }
         
         // Wait for terminal to be ready, then fit and send dimensions
         setTimeout(() => {
@@ -594,56 +693,71 @@ function Shell({ selectedProject, selectedSession, isActive }) {
   }
 
   return (
-    <div className="h-full flex flex-col bg-gray-900 w-full">
+    <div className={`h-full flex flex-col bg-gray-900 w-full ${isFullscreen ? 'fixed inset-0 z-50' : ''}`}>
       {/* Header */}
       <div className="flex-shrink-0 bg-gray-800 border-b border-gray-700 px-4 py-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
-            {selectedSession && (() => {
-              const displaySessionName = selectedSession.summary || 'New Session';
-              return (
-                <span className="text-xs text-blue-300">
-                  ({displaySessionName.slice(0, 30)}...)
-                </span>
-              );
-            })()}
-            {!selectedSession && (
-              <span className="text-xs text-gray-400">(New Session)</span>
+            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : (isConnecting ? 'bg-yellow-500' : 'bg-red-500')}`} />
+            {isConnected && (
+              <span className="text-xs text-green-300">
+                Connected{shellStatus.reconnectedSessionId && ` (${shellStatus.reconnectedSessionId.slice(0, 8)}...)`}
+              </span>
             )}
+            {isConnecting && <span className="text-xs text-yellow-300">Connecting...</span>}
+            {!isConnected && !isConnecting && isInitialized && <span className="text-xs text-red-300">Disconnected</span>}
+            
+            <span className="text-xs text-gray-500 font-mono">
+              Shell - {selectedProject.displayName}
+            </span>
             {!isInitialized && (
               <span className="text-xs text-yellow-400">(Initializing...)</span>
             )}
             {isRestarting && (
               <span className="text-xs text-blue-400">(Restarting...)</span>
             )}
-            {/* Tmux Status */}
-            {tmuxStatus.exists && (
-              <span className="text-xs text-orange-400 flex items-center space-x-1">
+            
+            {/* Shell Session Status */}
+            {shellStatus.exists && (
+              <span className="text-xs text-purple-400 flex items-center space-x-1" title={`Shell session running (PID: ${shellStatus.processId})`}>
                 <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M2 12C2 6.48 6.48 2 12 2s10 4.48 10 10-4.48 10-10 10S2 17.52 2 12zm4.5 0L12 7.5 17.5 12 12 16.5 6.5 12z"/>
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
                 </svg>
-                <span>Tmux Running</span>
+                <span>Shell Active</span>
+                {!shellStatus.isConnected && <span className="text-orange-300">(Background)</span>}
               </span>
             )}
           </div>
           <div className="flex items-center space-x-3">
-            {/* Close Tmux Button */}
-            {tmuxStatus.exists && (
+            {/* Fullscreen Toggle Button */}
+            <button
+              onClick={toggleFullscreen}
+              className="text-xs text-gray-400 hover:text-white flex items-center space-x-1"
+              title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+            >
+              {isFullscreen ? (
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M15 9v-4.5M15 9h4.5M15 9l5.25-5.25M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 15v4.5M15 15h4.5m0 0l5.25 5.25" />
+                </svg>
+              ) : (
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+                </svg>
+              )}
+              <span>{isFullscreen ? 'Exit' : 'Fullscreen'}</span>
+            </button>
+
+            {/* Kill Remote Shell Button */}
+            {shellStatus.exists && (
               <button
-                onClick={closeTmuxSession}
-                disabled={isClosingTmux}
-                className="px-3 py-1 text-xs bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50 flex items-center space-x-1"
-                title="Close tmux session"
+                onClick={killShellSession}
+                className="px-3 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700 flex items-center space-x-1"
+                title="终止远程Shell进程"
               >
-                {isClosingTmux ? (
-                  <div className="w-3 h-3 animate-spin rounded-full border border-white border-t-transparent"></div>
-                ) : (
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                )}
-                <span>{isClosingTmux ? 'Closing...' : 'Close Tmux'}</span>
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                <span>终止远程Shell</span>
               </button>
             )}
 
@@ -677,7 +791,15 @@ function Shell({ selectedProject, selectedSession, isActive }) {
 
       {/* Terminal */}
       <div className="flex-1 p-2 overflow-hidden relative">
-        <div ref={terminalRef} className="h-full w-full focus:outline-none" style={{ outline: 'none' }} />
+        <div 
+          ref={terminalRef} 
+          className="h-full w-full focus:outline-none" 
+          style={{ 
+            outline: 'none',
+            overflow: 'hidden' // Let xterm handle its own scrolling
+          }} 
+          tabIndex={0} // Make focusable for keyboard events
+        />
         
         {/* Loading state */}
         {!isInitialized && (
@@ -701,14 +823,24 @@ function Shell({ selectedProject, selectedSession, isActive }) {
                 <span>Continue in Shell</span>
               </button>
               <p className="text-gray-400 text-sm mt-3 px-2">
-                {selectedSession ? 
-                  (() => {
-                    const displaySessionName = selectedSession.summary || 'New Session';
-                    return `Resume session: ${displaySessionName.slice(0, 50)}...`;
-                  })() : 
-                  'Start a new Claude session'
-                }
+                Connect to {selectedProject.displayName} shell
               </p>
+              
+
+              {/* Persistent Shell Status */}
+              {shellStatus.exists && !isConnected && (
+                <div className="mt-2 p-2 bg-purple-900/20 border border-purple-500/30 rounded text-xs text-purple-300">
+                  <div className="flex items-center space-x-1 mb-1">
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                    </svg>
+                    <span>Persistent shell session active</span>
+                  </div>
+                  <div>Running in background (PID: {shellStatus.processId})</div>
+                  <div>Created: {new Date(shellStatus.createdAt).toLocaleString()}</div>
+                  <div className="text-green-300">Will reconnect to existing session</div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -727,6 +859,7 @@ function Shell({ selectedProject, selectedSession, isActive }) {
             </div>
           </div>
         )}
+
       </div>
     </div>
   );

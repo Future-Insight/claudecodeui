@@ -1,8 +1,9 @@
 import { MessageSquare, Folder, Terminal, GitBranch } from 'lucide-react';
 
-function MobileNav({ activeTab, setActiveTab, isInputFocused }) {
+function MobileNav({ activeTab, setActiveTab, isInputFocused, selectedProject }) {
   // Detect dark mode
   const isDarkMode = document.documentElement.classList.contains('dark');
+  const shellTabId = selectedProject ? `shell-${selectedProject.name}` : 'shell';
   const navItems = [
     {
       id: 'chat',
@@ -10,9 +11,10 @@ function MobileNav({ activeTab, setActiveTab, isInputFocused }) {
       onClick: () => setActiveTab('chat')
     },
     {
-      id: 'shell',
+      id: shellTabId,
+      displayId: 'shell', // For UI display purposes
       icon: Terminal,
-      onClick: () => setActiveTab('shell')
+      onClick: () => setActiveTab(shellTabId)
     },
     {
       id: 'files',
@@ -70,7 +72,7 @@ function MobileNav({ activeTab, setActiveTab, isInputFocused }) {
                   ? 'text-blue-600 dark:text-blue-400'
                   : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
               }`}
-              aria-label={item.id}
+              aria-label={item.displayId || item.id}
             >
               <Icon className="w-5 h-5" />
               {isActive && (

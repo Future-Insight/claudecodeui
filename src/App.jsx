@@ -46,7 +46,18 @@ function AppContent() {
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
   const [selectedSession, setSelectedSession] = useState(null);
-  const [activeTab, setActiveTab] = useState('chat'); // 'chat' or 'files'
+  // Track active tab per project - each project remembers its own tab state
+  const [projectTabs, setProjectTabs] = useState({}); // project.name -> activeTab
+  const activeTab = selectedProject ? (projectTabs[selectedProject.name] || 'chat') : 'chat';
+  
+  const setActiveTab = (tabName) => {
+    if (selectedProject) {
+      setProjectTabs(prev => ({
+        ...prev,
+        [selectedProject.name]: tabName
+      }));
+    }
+  };
   const [isMobile, setIsMobile] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isLoadingProjects, setIsLoadingProjects] = useState(true);
@@ -268,8 +279,8 @@ function AppContent() {
   const handleSessionSelect = (session) => {
     setSelectedSession(session);
     // Only switch to chat tab when user explicitly selects a session
-    // This prevents tab switching during automatic updates
-    if (activeTab !== 'git' && activeTab !== 'preview') {
+    // This prevents tab switching during automatic updates and preserves shell tabs
+    if (!activeTab.startsWith('shell-') && activeTab !== 'git' && activeTab !== 'preview') {
       setActiveTab('chat');
     }
     
@@ -595,6 +606,7 @@ function AppContent() {
           showRawParameters={showRawParameters}
           autoScrollToBottom={autoScrollToBottom}
           sendByCtrlEnter={sendByCtrlEnter}
+          projects={projects}
         />
       </div>
 
@@ -604,6 +616,7 @@ function AppContent() {
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           isInputFocused={isInputFocused}
+          selectedProject={selectedProject}
         />
       )}
       {/* Quick Settings Panel - Only show on chat tab */}

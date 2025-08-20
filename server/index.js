@@ -46,7 +46,7 @@ import mcpRoutes from './routes/mcp.js';
 import previewRoutes from './routes/preview.js';
 import { initializeDatabase } from './database/db.js';
 import { validateApiKey, authenticateToken, authenticateWebSocket } from './middleware/auth.js';
-import tmuxManager from './tmux-manager.js';
+import shellManager from './shell-manager.js';
 
 // File system watcher for projects folder
 let projectsWatcher = null;
@@ -513,185 +513,74 @@ function handleChatConnection(ws) {
 // Handle shell WebSocket connections
 function handleShellConnection(ws) {
     console.log('🐚 Shell client connected');
-    let shellProcess = null;
-    let currentTmuxSession = null;
+    let currentSessionId = null;
+    let currentProjectPath = null;
 
     ws.on('message', async (message) => {
         try {
             const data = JSON.parse(message);
-            //console.log('📨 Shell message received:', data.type);
 
             if (data.type === 'init') {
-                // Initialize shell with project path and session info
                 const projectPath = data.projectPath || process.cwd();
                 const sessionId = data.sessionId;
                 const hasSession = data.hasSession;
                 const cols = data.cols || 80;
                 const rows = data.rows || 24;
 
-                console.log('🚀 Starting tmux shell in:', projectPath);
+                currentSessionId = sessionId;
+                currentProjectPath = projectPath;
+
+                console.log('🚀 Initializing persistent shell session');
+                console.log('📂 Project:', projectPath);
                 console.log('📋 SessionId:', sessionId);
 
-                if (!sessionId) {
-                    ws.send(JSON.stringify({
-                        type: 'output',
-                        data: `\r\n\x1b[31mError: SessionId is required for tmux shell\x1b[0m\r\n`
-                    }));
-                    return;
-                }
-
                 try {
-                    // Check if tmux session already exists
-                    const status = await tmuxManager.getSessionStatus(sessionId);
-                    let sessionInfo;
+                    // 获取或创建持久会话
+                    const { session, isNew } = await shellManager.getOrCreateSession(
+                        projectPath, sessionId, cols, rows
+                    );
 
-                    if (status.exists) {
-                        // Attach to existing session
-                        currentTmuxSession = await tmuxManager.attachToSessionId(sessionId);
-                        console.log('🔗 Attaching to existing tmux session:', currentTmuxSession);
-                    } else {
-                        // Create new tmux session with correct size
-                        sessionInfo = await tmuxManager.createSessionForId(sessionId, projectPath, cols, rows);
-                        currentTmuxSession = sessionInfo.tmuxSessionName;
-                        console.log('✅ Created new tmux session:', currentTmuxSession);
-                    }
+                    // 连接WebSocket到会话
+                    shellManager.attachWebSocket(projectPath, ws);
 
-                    // Send welcome message
-                    const welcomeMsg = status.exists ?
-                        `\x1b[36m🔄 Resuming Claude session via tmux: ${sessionId}\x1b[0m\r\n` :
-                        `\x1b[36m🚀 Starting Claude session via tmux: ${sessionId}\x1b[0m\r\n`;
+                    // 发送欢迎消息
+                    const welcomeMsg = isNew ? 
+                        `\x1b[36m🚀 Started new persistent Claude session\x1b[0m\r\n` :
+                        `\x1b[36m🔄 Reconnected to existing Claude session\x1b[0m\r\n`;
 
                     ws.send(JSON.stringify({
                         type: 'output',
                         data: welcomeMsg
                     }));
 
-                    // Create PTY connection to tmux session
-                    shellProcess = await tmuxManager.createPtyConnectionForSessionId(sessionId, cols, rows);
+                    console.log(`🟢 ${isNew ? 'Created' : 'Reconnected to'} session for ${sessionId || 'project'}`);
 
-                    console.log('🟢 Connected to tmux session for sessionId:', sessionId);
-
-                    // Handle data output
-                    shellProcess.onData((data) => {
-                        if (ws.readyState === ws.OPEN) {
-                            let outputData = data;
-
-                            // Check for various URL opening patterns
-                            const patterns = [
-                                // Direct browser opening commands
-                                /(?:xdg-open|open|start)\s+(https?:\/\/[^\s\x1b\x07]+)/g,
-                                // BROWSER environment variable override
-                                /OPEN_URL:\s*(https?:\/\/[^\s\x1b\x07]+)/g,
-                                // Git and other tools opening URLs
-                                /Opening\s+(https?:\/\/[^\s\x1b\x07]+)/gi,
-                                // General URL patterns that might be opened
-                                /Visit:\s*(https?:\/\/[^\s\x1b\x07]+)/gi,
-                                /View at:\s*(https?:\/\/[^\s\x1b\x07]+)/gi,
-                                /Browse to:\s*(https?:\/\/[^\s\x1b\x07]+)/gi
-                            ];
-
-                            patterns.forEach(pattern => {
-                                let match;
-                                while ((match = pattern.exec(data)) !== null) {
-                                    const url = match[1];
-                                    console.log('🔗 Detected URL for opening:', url);
-
-                                    // Send URL opening message to client
-                                    ws.send(JSON.stringify({
-                                        type: 'url_open',
-                                        url: url
-                                    }));
-
-                                    // Replace the OPEN_URL pattern with a user-friendly message
-                                    if (pattern.source.includes('OPEN_URL')) {
-                                        outputData = outputData.replace(match[0], `🌐 Opening in browser: ${url}`);
-                                    }
-                                }
-                            });
-
-                            // Send regular output
-                            ws.send(JSON.stringify({
-                                type: 'output',
-                                data: outputData
-                            }));
-                        }
-                    });
-
-                    // Handle process exit (PTY detaching from tmux)
-                    shellProcess.onExit((exitCode) => {
-                        console.log('🔚 PTY detached from tmux session for sessionId:', sessionId);
-                        if (ws.readyState === ws.OPEN) {
-                            ws.send(JSON.stringify({
-                                type: 'output',
-                                data: `\r\n\x1b[33m📋 Detached from tmux session (session continues running in background)\x1b[0m\r\n`
-                            }));
-                        }
-                        shellProcess = null;
-                    });
-
-                } catch (tmuxError) {
-                    console.error('❌ Error creating tmux session:', tmuxError);
+                } catch (shellError) {
+                    console.error('❌ Error managing shell session:', shellError);
                     ws.send(JSON.stringify({
                         type: 'output',
-                        data: `\r\n\x1b[31mError creating tmux session: ${tmuxError.message}\x1b[0m\r\n`
+                        data: `\r\n\x1b[31mError: ${shellError.message}\x1b[0m\r\n`
                     }));
                 }
 
             } else if (data.type === 'input') {
-                // Send input to shell process
-                if (shellProcess && shellProcess.write) {
-                    try {
-                        shellProcess.write(data.data);
-                    } catch (error) {
-                        console.error('Error writing to shell:', error);
+                // 发送输入到持久会话
+                if (currentProjectPath) {
+                    const success = shellManager.writeToSession(currentProjectPath, data.data);
+                    if (!success) {
+                        console.warn('⚠️ Failed to write to session');
                     }
                 } else {
-                    console.warn('No active shell process to send input to');
+                    console.warn('⚠️ No active session for input');
                 }
+
             } else if (data.type === 'resize') {
-                // Handle terminal resize
-                const sessionId = data.sessionId;
+                // 调整持久会话终端大小
                 const cols = data.cols || 80;
                 const rows = data.rows || 24;
 
-                console.log('Terminal resize requested:', cols, 'x', rows, 'for sessionId:', sessionId);
-
-                if (shellProcess && shellProcess.resize) {
-                    shellProcess.resize(cols, rows);
-                }
-
-                // Also resize the tmux session directly
-                if (sessionId) {
-                    const tmuxSessionName = tmuxManager.generateSessionName(sessionId);
-                    try {
-                        await tmuxManager.sendCommandToSessionId(sessionId, '');  // Ensure session is active
-                        await execAsync(`tmux resize-window -t "${tmuxSessionName}" -x ${cols} -y ${rows}`);
-                        await execAsync(`tmux resize-pane -t "${tmuxSessionName}:0" -x ${cols} -y ${rows}`);
-                        console.log(`📏 Resized tmux session ${tmuxSessionName} to ${cols}x${rows}`);
-                    } catch (error) {
-                        console.warn(`⚠️ Failed to resize tmux session:`, error.message);
-                    }
-                }
-            } else if (data.type === 'detach') {
-                // Explicitly detach from tmux session
-                const sessionId = data.sessionId;
-                if (sessionId) {
-                    await tmuxManager.detachFromSessionId(sessionId);
-                    ws.send(JSON.stringify({
-                        type: 'output',
-                        data: `\r\n\x1b[32m📋 Detached from tmux session for sessionId: ${sessionId}\x1b[0m\r\n`
-                    }));
-                }
-            } else if (data.type === 'kill') {
-                // Kill tmux session
-                const sessionId = data.sessionId;
-                if (sessionId) {
-                    await tmuxManager.killSessionId(sessionId);
-                    ws.send(JSON.stringify({
-                        type: 'output',
-                        data: `\r\n\x1b[31m💀 Killed tmux session for sessionId: ${sessionId}\x1b[0m\r\n`
-                    }));
-                    currentTmuxSession = null;
+                if (currentProjectPath) {
+                    shellManager.resizeSession(currentProjectPath, cols, rows);
                 }
             }
         } catch (error) {
@@ -707,19 +596,20 @@ function handleShellConnection(ws) {
 
     ws.on('close', () => {
         console.log('🔌 Shell client disconnected');
-
-        // Only detach from tmux session, don't kill it
-        // tmux session will continue running in background
-
-        // Close PTY connection if active
-        if (shellProcess && shellProcess.kill) {
-            console.log('🔴 Closing PTY connection');
-            shellProcess.kill();
+        
+        // 断开WebSocket但保持shell进程运行
+        if (currentProjectPath) {
+            shellManager.detachWebSocket(currentProjectPath);
         }
     });
 
     ws.on('error', (error) => {
         console.error('❌ Shell WebSocket error:', error);
+        
+        // 发生错误时也要断开连接
+        if (currentProjectPath) {
+            shellManager.detachWebSocket(currentProjectPath);
+        }
     });
 }
 
@@ -808,27 +698,44 @@ app.post('/api/projects/:projectName/upload-images', authenticateToken, async (r
     }
 });
 
-// Session状态检查API
-app.get('/api/sessions/:sessionId/tmux-status', authenticateToken, async (req, res) => {
+// Shell会话管理API
+
+// 获取项目shell状态
+app.get('/api/projects/:projectName/shell-status', authenticateToken, async (req, res) => {
     try {
-        const { sessionId } = req.params;
-        const status = await tmuxManager.getSessionStatus(sessionId);
+        const { projectName } = req.params;
+        const projectPath = await extractProjectDirectory(projectName);
+        
+        const status = shellManager.getSessionStatus(projectPath);
         res.json(status);
     } catch (error) {
-        console.error('Error checking session tmux status:', error);
+        console.error('Error checking shell session status:', error);
         res.status(500).json({ error: error.message });
     }
 });
 
-// 关闭sessionId对应的tmux会话
-app.delete('/api/sessions/:sessionId/tmux', authenticateToken, async (req, res) => {
+// 终止项目Shell会话
+app.delete('/api/projects/:projectName/shell', authenticateToken, async (req, res) => {
     try {
-        const { sessionId } = req.params;
+        const { projectName } = req.params;
         const { force = false } = req.query;
-        await tmuxManager.killSessionId(sessionId, force === 'true');
-        res.json({ success: true });
+        const projectPath = await extractProjectDirectory(projectName);
+        
+        const success = shellManager.killSession(projectPath, force === 'true');
+        res.json({ success });
     } catch (error) {
-        console.error('Error killing session tmux:', error);
+        console.error('Error terminating shell session:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// 获取所有活跃Shell会话
+app.get('/api/shell-sessions', authenticateToken, async (req, res) => {
+    try {
+        const sessions = shellManager.getAllSessions();
+        res.json({ sessions });
+    } catch (error) {
+        console.error('Error getting shell sessions:', error);
         res.status(500).json({ error: error.message });
     }
 });
