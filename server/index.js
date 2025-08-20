@@ -30,10 +30,13 @@ import { WebSocketServer } from 'ws';
 import http from 'http';
 import cors from 'cors';
 import { promises as fsPromises } from 'fs';
-import { spawn } from 'child_process';
+import { spawn, exec } from 'child_process';
+import { promisify } from 'util';
 import os from 'os';
 import pty from 'node-pty';
 import mime from 'mime-types';
+
+const execAsync = promisify(exec);
 
 import { getProjects, getSessions, getSessionMessages, renameProject, deleteSession, deleteProject, addProjectManually, extractProjectDirectory, clearProjectDirectoryCache } from './projects.js';
 import { spawnClaude, abortClaudeSession } from './claude-cli.js';
@@ -43,6 +46,7 @@ import mcpRoutes from './routes/mcp.js';
 import previewRoutes from './routes/preview.js';
 import { initializeDatabase } from './database/db.js';
 import { validateApiKey, authenticateToken, authenticateWebSocket } from './middleware/auth.js';
+import tmuxManager from './tmux-manager.js';
 
 // File system watcher for projects folder
 let projectsWatcher = null;
@@ -175,6 +179,7 @@ app.use('/api/git', authenticateToken, gitRoutes);
 // MCP API Routes (protected)
 app.use('/api/mcp', authenticateToken, mcpRoutes);
 
+
 // Preview API Routes (protected)
 app.use('/api', authenticateToken, previewRoutes);
 
@@ -219,13 +224,13 @@ app.get('/api/projects/:projectName/sessions/:sessionId/messages', authenticateT
     try {
         const { projectName, sessionId } = req.params;
         const { limit, offset } = req.query;
-        
+
         // Parse limit and offset if provided
         const parsedLimit = limit ? parseInt(limit, 10) : null;
         const parsedOffset = offset ? parseInt(offset, 10) : 0;
-        
+
         const result = await getSessionMessages(projectName, sessionId, parsedLimit, parsedOffset);
-        
+
         // Handle both old and new response formats
         if (Array.isArray(result)) {
             // Backward compatibility: no pagination parameters were provided
@@ -509,77 +514,62 @@ function handleChatConnection(ws) {
 function handleShellConnection(ws) {
     console.log('🐚 Shell client connected');
     let shellProcess = null;
+    let currentTmuxSession = null;
 
     ws.on('message', async (message) => {
         try {
             const data = JSON.parse(message);
-            console.log('📨 Shell message received:', data.type);
+            //console.log('📨 Shell message received:', data.type);
 
             if (data.type === 'init') {
                 // Initialize shell with project path and session info
                 const projectPath = data.projectPath || process.cwd();
                 const sessionId = data.sessionId;
                 const hasSession = data.hasSession;
-                const provider = data.provider || 'claude';
+                const cols = data.cols || 80;
+                const rows = data.rows || 24;
 
-                console.log('🚀 Starting shell in:', projectPath);
-                console.log('📋 Session info:', hasSession ? `Resume session ${sessionId}` : 'New session');
-                console.log('🤖 Provider:', provider);
+                console.log('🚀 Starting tmux shell in:', projectPath);
+                console.log('📋 SessionId:', sessionId);
 
-                // First send a welcome message
-                const providerName = 'Claude';
-                const welcomeMsg = hasSession ?
-                    `\x1b[36mResuming ${providerName} session ${sessionId} in: ${projectPath}\x1b[0m\r\n` :
-                    `\x1b[36mStarting new ${providerName} session in: ${projectPath}\x1b[0m\r\n`;
-
-                ws.send(JSON.stringify({
-                    type: 'output',
-                    data: welcomeMsg
-                }));
+                if (!sessionId) {
+                    ws.send(JSON.stringify({
+                        type: 'output',
+                        data: `\r\n\x1b[31mError: SessionId is required for tmux shell\x1b[0m\r\n`
+                    }));
+                    return;
+                }
 
                 try {
-                    // Prepare the shell command adapted to the platform and provider
-                    let shellCommand;
-                    {
-                        // Use claude command (default)
-                        if (os.platform() === 'win32') {
-                            if (hasSession && sessionId) {
-                                // Try to resume session, but with fallback to new session if it fails
-                                shellCommand = `Set-Location -Path "${projectPath}"; claude --resume ${sessionId}; if ($LASTEXITCODE -ne 0) { claude }`;
-                            } else {
-                                shellCommand = `Set-Location -Path "${projectPath}"; claude`;
-                            }
-                        } else {
-                            if (hasSession && sessionId) {
-                                shellCommand = `cd "${projectPath}" && claude --resume ${sessionId} || claude`;
-                            } else {
-                                shellCommand = `cd "${projectPath}" && claude`;
-                            }
-                        }
+                    // Check if tmux session already exists
+                    const status = await tmuxManager.getSessionStatus(sessionId);
+                    let sessionInfo;
+
+                    if (status.exists) {
+                        // Attach to existing session
+                        currentTmuxSession = await tmuxManager.attachToSessionId(sessionId);
+                        console.log('🔗 Attaching to existing tmux session:', currentTmuxSession);
+                    } else {
+                        // Create new tmux session with correct size
+                        sessionInfo = await tmuxManager.createSessionForId(sessionId, projectPath, cols, rows);
+                        currentTmuxSession = sessionInfo.tmuxSessionName;
+                        console.log('✅ Created new tmux session:', currentTmuxSession);
                     }
 
-                    console.log('🔧 Executing shell command:', shellCommand);
+                    // Send welcome message
+                    const welcomeMsg = status.exists ?
+                        `\x1b[36m🔄 Resuming Claude session via tmux: ${sessionId}\x1b[0m\r\n` :
+                        `\x1b[36m🚀 Starting Claude session via tmux: ${sessionId}\x1b[0m\r\n`;
 
-                    // Use appropriate shell based on platform
-                    const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';
-                    const shellArgs = os.platform() === 'win32' ? ['-Command', shellCommand] : ['-c', shellCommand];
+                    ws.send(JSON.stringify({
+                        type: 'output',
+                        data: welcomeMsg
+                    }));
 
-                    shellProcess = pty.spawn(shell, shellArgs, {
-                        name: 'xterm-256color',
-                        cols: 80,
-                        rows: 24,
-                        cwd: process.env.HOME || (os.platform() === 'win32' ? process.env.USERPROFILE : '/'),
-                        env: {
-                            ...process.env,
-                            TERM: 'xterm-256color',
-                            COLORTERM: 'truecolor',
-                            FORCE_COLOR: '3',
-                            // Override browser opening commands to echo URL for detection
-                            BROWSER: os.platform() === 'win32' ? 'echo "OPEN_URL:"' : 'echo "OPEN_URL:"'
-                        }
-                    });
+                    // Create PTY connection to tmux session
+                    shellProcess = await tmuxManager.createPtyConnectionForSessionId(sessionId, cols, rows);
 
-                    console.log('🟢 Shell process started with PTY, PID:', shellProcess.pid);
+                    console.log('🟢 Connected to tmux session for sessionId:', sessionId);
 
                     // Handle data output
                     shellProcess.onData((data) => {
@@ -627,23 +617,23 @@ function handleShellConnection(ws) {
                         }
                     });
 
-                    // Handle process exit
+                    // Handle process exit (PTY detaching from tmux)
                     shellProcess.onExit((exitCode) => {
-                        console.log('🔚 Shell process exited with code:', exitCode.exitCode, 'signal:', exitCode.signal);
+                        console.log('🔚 PTY detached from tmux session for sessionId:', sessionId);
                         if (ws.readyState === ws.OPEN) {
                             ws.send(JSON.stringify({
                                 type: 'output',
-                                data: `\r\n\x1b[33mProcess exited with code ${exitCode.exitCode}${exitCode.signal ? ` (${exitCode.signal})` : ''}\x1b[0m\r\n`
+                                data: `\r\n\x1b[33m📋 Detached from tmux session (session continues running in background)\x1b[0m\r\n`
                             }));
                         }
                         shellProcess = null;
                     });
 
-                } catch (spawnError) {
-                    console.error('❌ Error spawning process:', spawnError);
+                } catch (tmuxError) {
+                    console.error('❌ Error creating tmux session:', tmuxError);
                     ws.send(JSON.stringify({
                         type: 'output',
-                        data: `\r\n\x1b[31mError: ${spawnError.message}\x1b[0m\r\n`
+                        data: `\r\n\x1b[31mError creating tmux session: ${tmuxError.message}\x1b[0m\r\n`
                     }));
                 }
 
@@ -660,9 +650,48 @@ function handleShellConnection(ws) {
                 }
             } else if (data.type === 'resize') {
                 // Handle terminal resize
+                const sessionId = data.sessionId;
+                const cols = data.cols || 80;
+                const rows = data.rows || 24;
+
+                console.log('Terminal resize requested:', cols, 'x', rows, 'for sessionId:', sessionId);
+
                 if (shellProcess && shellProcess.resize) {
-                    console.log('Terminal resize requested:', data.cols, 'x', data.rows);
-                    shellProcess.resize(data.cols, data.rows);
+                    shellProcess.resize(cols, rows);
+                }
+
+                // Also resize the tmux session directly
+                if (sessionId) {
+                    const tmuxSessionName = tmuxManager.generateSessionName(sessionId);
+                    try {
+                        await tmuxManager.sendCommandToSessionId(sessionId, '');  // Ensure session is active
+                        await execAsync(`tmux resize-window -t "${tmuxSessionName}" -x ${cols} -y ${rows}`);
+                        await execAsync(`tmux resize-pane -t "${tmuxSessionName}:0" -x ${cols} -y ${rows}`);
+                        console.log(`📏 Resized tmux session ${tmuxSessionName} to ${cols}x${rows}`);
+                    } catch (error) {
+                        console.warn(`⚠️ Failed to resize tmux session:`, error.message);
+                    }
+                }
+            } else if (data.type === 'detach') {
+                // Explicitly detach from tmux session
+                const sessionId = data.sessionId;
+                if (sessionId) {
+                    await tmuxManager.detachFromSessionId(sessionId);
+                    ws.send(JSON.stringify({
+                        type: 'output',
+                        data: `\r\n\x1b[32m📋 Detached from tmux session for sessionId: ${sessionId}\x1b[0m\r\n`
+                    }));
+                }
+            } else if (data.type === 'kill') {
+                // Kill tmux session
+                const sessionId = data.sessionId;
+                if (sessionId) {
+                    await tmuxManager.killSessionId(sessionId);
+                    ws.send(JSON.stringify({
+                        type: 'output',
+                        data: `\r\n\x1b[31m💀 Killed tmux session for sessionId: ${sessionId}\x1b[0m\r\n`
+                    }));
+                    currentTmuxSession = null;
                 }
             }
         } catch (error) {
@@ -678,8 +707,13 @@ function handleShellConnection(ws) {
 
     ws.on('close', () => {
         console.log('🔌 Shell client disconnected');
+
+        // Only detach from tmux session, don't kill it
+        // tmux session will continue running in background
+
+        // Close PTY connection if active
         if (shellProcess && shellProcess.kill) {
-            console.log('🔴 Killing shell process:', shellProcess.pid);
+            console.log('🔴 Closing PTY connection');
             shellProcess.kill();
         }
     });
@@ -774,60 +808,85 @@ app.post('/api/projects/:projectName/upload-images', authenticateToken, async (r
     }
 });
 
+// Session状态检查API
+app.get('/api/sessions/:sessionId/tmux-status', authenticateToken, async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+        const status = await tmuxManager.getSessionStatus(sessionId);
+        res.json(status);
+    } catch (error) {
+        console.error('Error checking session tmux status:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// 关闭sessionId对应的tmux会话
+app.delete('/api/sessions/:sessionId/tmux', authenticateToken, async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+        const { force = false } = req.query;
+        await tmuxManager.killSessionId(sessionId, force === 'true');
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error killing session tmux:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Preview endpoints - simplified for direct URL access
 app.get('/api/preview/:projectName/url', authenticateToken, async (req, res) => {
-  try {
-    const { projectName } = req.params;
-    const projectPath = await extractProjectDirectory(projectName);
-    
-    // 读取项目配置获取端口
-    const configPath = path.join(projectPath, '.claudeui.json');
-    let config;
     try {
-      const configData = await fsPromises.readFile(configPath, 'utf8');
-      config = JSON.parse(configData);
+        const { projectName } = req.params;
+        const projectPath = await extractProjectDirectory(projectName);
+
+        // 读取项目配置获取端口
+        const configPath = path.join(projectPath, '.claudeui.json');
+        let config;
+        try {
+            const configData = await fsPromises.readFile(configPath, 'utf8');
+            config = JSON.parse(configData);
+        } catch (error) {
+            return res.status(404).json({ error: 'No development server configuration found' });
+        }
+
+        if (!config || !config.dev || !config.dev.port) {
+            return res.status(404).json({ error: 'No development server configuration found' });
+        }
+
+        // 获取全局预览配置
+        const globalConfigPath = path.join(os.homedir(), '.claude', 'preview-config.json');
+        let globalConfig = { host: 'localhost', openInNewTab: true };
+        try {
+            const globalConfigData = await fsPromises.readFile(globalConfigPath, 'utf8');
+            globalConfig = { ...globalConfig, ...JSON.parse(globalConfigData) };
+        } catch (error) {
+            // 使用默认配置
+        }
+
+        const previewUrl = `http://${globalConfig.host}:${config.dev.port}`;
+
+        res.json({
+            success: true,
+            url: previewUrl,
+            port: config.dev.port,
+            host: globalConfig.host,
+            openInNewTab: globalConfig.openInNewTab
+        });
+
     } catch (error) {
-      return res.status(404).json({ error: 'No development server configuration found' });
+        console.error('Preview URL error:', error);
+        res.status(500).json({ error: 'Failed to get preview URL', details: error.message });
     }
-    
-    if (!config || !config.dev || !config.dev.port) {
-      return res.status(404).json({ error: 'No development server configuration found' });
-    }
-    
-    // 获取全局预览配置
-    const globalConfigPath = path.join(os.homedir(), '.claude', 'preview-config.json');
-    let globalConfig = { host: 'localhost', openInNewTab: true };
-    try {
-      const globalConfigData = await fsPromises.readFile(globalConfigPath, 'utf8');
-      globalConfig = { ...globalConfig, ...JSON.parse(globalConfigData) };
-    } catch (error) {
-      // 使用默认配置
-    }
-    
-    const previewUrl = `http://${globalConfig.host}:${config.dev.port}`;
-    
-    res.json({
-      success: true,
-      url: previewUrl,
-      port: config.dev.port,
-      host: globalConfig.host,
-      openInNewTab: globalConfig.openInNewTab
-    });
-    
-  } catch (error) {
-    console.error('Preview URL error:', error);
-    res.status(500).json({ error: 'Failed to get preview URL', details: error.message });
-  }
 });
 
 // Serve React app for all other routes
 app.get('*', (req, res) => {
-  if (process.env.NODE_ENV === 'production') {
-    res.sendFile(path.join(__dirname, '../dist/index.html'));
-  } else {
-    // In development, redirect to Vite dev server
-    res.redirect(`http://localhost:${process.env.VITE_PORT || 3001}`);
-  }
+    if (process.env.NODE_ENV === 'production') {
+        res.sendFile(path.join(__dirname, '../dist/index.html'));
+    } else {
+        // In development, redirect to Vite dev server
+        res.redirect(`http://localhost:${process.env.VITE_PORT || 3001}`);
+    }
 });
 
 // Helper function to convert permissions to rwx format
@@ -924,7 +983,7 @@ async function startServer() {
             console.log(`Claude Code UI server running on http://0.0.0.0:${PORT}`);
 
             // Start watching the projects folder for changes
-            await setupProjectsWatcher(); 
+            await setupProjectsWatcher();
         });
     } catch (error) {
         console.error('❌ Failed to start server:', error);

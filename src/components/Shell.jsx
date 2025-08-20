@@ -39,6 +39,57 @@ function Shell({ selectedProject, selectedSession, isActive }) {
   const [isRestarting, setIsRestarting] = useState(false);
   const [lastSessionId, setLastSessionId] = useState(null);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [tmuxStatus, setTmuxStatus] = useState({ exists: false, attached: false });
+  const [isClosingTmux, setIsClosingTmux] = useState(false);
+
+  // Check tmux status for current session
+  const checkTmuxStatus = async () => {
+    if (!selectedSession?.id) return;
+    
+    try {
+      const token = localStorage.getItem('auth-token');
+      const response = await fetch(`/api/sessions/${selectedSession.id}/tmux-status`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const status = await response.json();
+        setTmuxStatus(status);
+        console.log('Tmux status:', status);
+      }
+    } catch (error) {
+      console.error('Failed to check tmux status:', error);
+    }
+  };
+
+  // Close tmux session
+  const closeTmuxSession = async () => {
+    if (!selectedSession?.id || isClosingTmux) return;
+    
+    setIsClosingTmux(true);
+    try {
+      const token = localStorage.getItem('auth-token');
+      const response = await fetch(`/api/sessions/${selectedSession.id}/tmux`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        console.log('Tmux session closed successfully');
+        await checkTmuxStatus(); // Refresh status
+      } else {
+        console.error('Failed to close tmux session');
+      }
+    } catch (error) {
+      console.error('Error closing tmux session:', error);
+    } finally {
+      setIsClosingTmux(false);
+    }
+  };
 
   // Connect to shell function
   const connectToShell = () => {
@@ -126,7 +177,20 @@ function Shell({ selectedProject, selectedSession, isActive }) {
     }
     
     setLastSessionId(currentSessionId);
+    
+    // Check tmux status when session changes
+    if (currentSessionId) {
+      checkTmuxStatus();
+    }
   }, [selectedSession?.id, isInitialized]);
+
+  // Periodically check tmux status
+  useEffect(() => {
+    if (!selectedSession?.id) return;
+
+    const interval = setInterval(checkTmuxStatus, 5000); // Check every 5 seconds
+    return () => clearInterval(interval);
+  }, [selectedSession?.id]);
 
   // Initialize terminal when component mounts
   useEffect(() => {
@@ -164,7 +228,8 @@ function Shell({ selectedProject, selectedSession, isActive }) {
               ws.current.send(JSON.stringify({
                 type: 'resize',
                 cols: terminal.current.cols,
-                rows: terminal.current.rows
+                rows: terminal.current.rows,
+                sessionId: selectedSession?.id
               }));
             }
           }
@@ -297,7 +362,8 @@ function Shell({ selectedProject, selectedSession, isActive }) {
           ws.current.send(JSON.stringify({
             type: 'resize',
             cols: terminal.current.cols,
-            rows: terminal.current.rows
+            rows: terminal.current.rows,
+            sessionId: selectedSession?.id
           }));
         }
       }
@@ -325,7 +391,8 @@ function Shell({ selectedProject, selectedSession, isActive }) {
             ws.current.send(JSON.stringify({
               type: 'resize',
               cols: terminal.current.cols,
-              rows: terminal.current.rows
+              rows: terminal.current.rows,
+              sessionId: selectedSession?.id
             }));
           }
         }, 50);
@@ -370,7 +437,8 @@ function Shell({ selectedProject, selectedSession, isActive }) {
           ws.current.send(JSON.stringify({
             type: 'resize',
             cols: terminal.current.cols,
-            rows: terminal.current.rows
+            rows: terminal.current.rows,
+            sessionId: selectedSession?.id
           }));
         }
       }
@@ -449,7 +517,8 @@ function Shell({ selectedProject, selectedSession, isActive }) {
                   ws.current.send(JSON.stringify({
                     type: 'resize',
                     cols: terminal.current.cols,
-                    rows: terminal.current.rows
+                    rows: terminal.current.rows,
+                    sessionId: selectedSession?.id
                   }));
                 }
               }, 100);
@@ -548,8 +617,36 @@ function Shell({ selectedProject, selectedSession, isActive }) {
             {isRestarting && (
               <span className="text-xs text-blue-400">(Restarting...)</span>
             )}
+            {/* Tmux Status */}
+            {tmuxStatus.exists && (
+              <span className="text-xs text-orange-400 flex items-center space-x-1">
+                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M2 12C2 6.48 6.48 2 12 2s10 4.48 10 10-4.48 10-10 10S2 17.52 2 12zm4.5 0L12 7.5 17.5 12 12 16.5 6.5 12z"/>
+                </svg>
+                <span>Tmux Running</span>
+              </span>
+            )}
           </div>
           <div className="flex items-center space-x-3">
+            {/* Close Tmux Button */}
+            {tmuxStatus.exists && (
+              <button
+                onClick={closeTmuxSession}
+                disabled={isClosingTmux}
+                className="px-3 py-1 text-xs bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50 flex items-center space-x-1"
+                title="Close tmux session"
+              >
+                {isClosingTmux ? (
+                  <div className="w-3 h-3 animate-spin rounded-full border border-white border-t-transparent"></div>
+                ) : (
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                )}
+                <span>{isClosingTmux ? 'Closing...' : 'Close Tmux'}</span>
+              </button>
+            )}
+
             {isConnected && (
               <button
                 onClick={disconnectFromShell}

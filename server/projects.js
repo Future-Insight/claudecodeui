@@ -483,6 +483,19 @@ async function deleteSession(projectName, sessionId) {
   const projectDir = path.join(process.env.HOME, '.claude', 'projects', projectName);
   
   try {
+    // First, try to close any associated tmux session
+    try {
+      const { tmuxManager } = await import('./tmux-manager.js');
+      const hasTmux = await tmuxManager.default.hasSessionTmux(sessionId);
+      if (hasTmux) {
+        console.log(`🔄 Closing tmux session for sessionId: ${sessionId}`);
+        await tmuxManager.default.killSessionId(sessionId, false); // Graceful close
+      }
+    } catch (tmuxError) {
+      console.warn(`⚠️ Failed to close tmux session for ${sessionId}:`, tmuxError.message);
+      // Continue with JSONL deletion even if tmux cleanup fails
+    }
+
     const files = await fs.readdir(projectDir);
     const jsonlFiles = files.filter(file => file.endsWith('.jsonl'));
     
@@ -519,6 +532,7 @@ async function deleteSession(projectName, sessionId) {
         
         // Write back the filtered content
         await fs.writeFile(jsonlFile, filteredLines.join('\n') + (filteredLines.length > 0 ? '\n' : ''));
+        console.log(`✅ Deleted session ${sessionId} from JSONL files`);
         return true;
       }
     }
