@@ -1141,7 +1141,7 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
         >
           {/* Loading overlay for session switching */}
           {isLoadingSessionMessages && chatMessages.length > 0 && (
-            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50">
+            <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[100]">
               <div className="flex items-center justify-center space-x-2 bg-white dark:bg-gray-800 px-4 py-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600">
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
                 <p className="text-gray-700 dark:text-gray-300">加载中...</p>
