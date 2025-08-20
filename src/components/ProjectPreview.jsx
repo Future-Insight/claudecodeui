@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Globe, Play, Square, Settings, RefreshCw, ExternalLink, AlertCircle, CheckCircle, Loader, Copy, Monitor } from 'lucide-react';
+import { Globe, Play, Square, Settings, RefreshCw, ExternalLink, AlertCircle, CheckCircle, Loader, Copy, Monitor, Terminal } from 'lucide-react';
 import { authenticatedFetch } from '../utils/api';
 import PreviewConfig from './PreviewConfig';
+import PreviewLogs from './PreviewLogs';
 
 function ProjectPreview({ selectedProject, isMobile }) {
   const [config, setConfig] = useState(null);
@@ -10,6 +11,7 @@ function ProjectPreview({ selectedProject, isMobile }) {
   const [isStarting, setIsStarting] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
+  const [showLogs, setShowLogs] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
   const [globalConfig, setGlobalConfig] = useState({ host: 'localhost', openInNewTab: true });
   const statusCheckIntervalRef = useRef(null);
@@ -241,6 +243,13 @@ function ProjectPreview({ selectedProject, isMobile }) {
                 在新标签页打开
               </button>
               <button
+                onClick={() => setShowLogs(true)}
+                className={`${isMobile ? 'w-full' : 'flex-1'} px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center justify-center gap-2`}
+              >
+                <Terminal className="w-4 h-4" />
+                查看日志
+              </button>
+              <button
                 onClick={() => setShowConfig(true)}
                 className={`${isMobile ? 'w-full' : 'flex-1'} px-6 py-3 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center justify-center gap-2`}
               >
@@ -289,6 +298,13 @@ function ProjectPreview({ selectedProject, isMobile }) {
             >
               {isStarting ? <Loader className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
               {isStarting ? '启动中...' : '启动服务器'}
+            </button>
+            <button
+              onClick={() => setShowLogs(true)}
+              className={`${isMobile ? 'w-full' : 'flex-1'} px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center justify-center gap-2`}
+            >
+              <Terminal className="w-4 h-4" />
+              查看日志
             </button>
             <button
               onClick={() => setShowConfig(true)}
@@ -345,6 +361,14 @@ function ProjectPreview({ selectedProject, isMobile }) {
           // 重新检查服务器状态
           checkServerStatus();
         }}
+        isMobile={isMobile}
+      />
+      
+      {/* 日志模态框 */}
+      <PreviewLogs
+        selectedProject={selectedProject}
+        isOpen={showLogs}
+        onClose={() => setShowLogs(false)}
         isMobile={isMobile}
       />
     </div>

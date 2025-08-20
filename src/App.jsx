@@ -25,6 +25,7 @@ import MainContent from './components/MainContent';
 import MobileNav from './components/MobileNav';
 import ToolsSettings from './components/ToolsSettings';
 import QuickSettingsPanel from './components/QuickSettingsPanel';
+import LogsPageFullscreen from './components/LogsPageFullscreen';
 
 import { useWebSocket } from './utils/websocket';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -657,6 +658,7 @@ function App() {
             <Routes>
               <Route path="/" element={<AppContent />} />
               <Route path="/session/:sessionId" element={<AppContent />} />
+              <Route path="/logs/:projectName" element={<LogsPageFullscreen />} />
             </Routes>
           </Router>
         </ProtectedRoute>
