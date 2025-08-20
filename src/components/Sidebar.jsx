@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -52,6 +53,7 @@ function Sidebar({
   currentVersion,
   onShowVersionModal
 }) {
+  const navigate = useNavigate();
   const [expandedProjects, setExpandedProjects] = useState(new Set());
   const [editingProject, setEditingProject] = useState(null);
   const [showNewProject, setShowNewProject] = useState(false);
@@ -436,7 +438,17 @@ function Sidebar({
       <div className="md:p-4 md:border-b md:border-border">
         {/* Desktop Header */}
         <div className="hidden md:flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <button 
+            className="flex items-center gap-3 hover:bg-accent rounded-lg p-2 -m-2 transition-colors cursor-pointer"
+            onClick={() => {
+              // 清除选择的项目和会话
+              onProjectSelect(null);
+              onSessionSelect(null);
+              // 跳转到首页
+              navigate('/');
+            }}
+            title="返回首页"
+          >
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shadow-sm">
               <MessageSquare className="w-4 h-4 text-primary-foreground" />
             </div>
@@ -444,7 +456,7 @@ function Sidebar({
               <h1 className="text-lg font-bold text-foreground">Claude Code UI</h1>
               <p className="text-sm text-muted-foreground">AI coding assistant interface</p>
             </div>
-          </div>
+          </button>
           <div className="flex gap-2">
             <Button
               variant="ghost"
@@ -478,7 +490,17 @@ function Sidebar({
         {/* Mobile Header */}
         <div className="md:hidden p-3 border-b border-border">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+            <button 
+              className="flex items-center gap-3 hover:bg-accent rounded-lg p-2 -m-2 transition-colors cursor-pointer"
+              onClick={() => {
+                // 清除选择的项目和会话
+                onProjectSelect(null);
+                onSessionSelect(null);
+                // 跳转到首页
+                navigate('/');
+              }}
+              title="返回首页"
+            >
               <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
                 <MessageSquare className="w-4 h-4 text-primary-foreground" />
               </div>
@@ -486,7 +508,7 @@ function Sidebar({
                 <h1 className="text-lg font-semibold text-foreground">Claude Code UI</h1>
                 <p className="text-sm text-muted-foreground">Projects</p>
               </div>
-            </div>
+            </button>
             <div className="flex gap-2">
               <button
                 className="w-8 h-8 rounded-md bg-background border border-border flex items-center justify-center active:scale-95 transition-all duration-150"

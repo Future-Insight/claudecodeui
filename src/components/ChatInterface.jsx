@@ -76,8 +76,6 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
   const [isTextareaExpanded, setIsTextareaExpanded] = useState(false);
   const [visibleMessageCount, setVisibleMessageCount] = useState(100);
   const [claudeStatus, setClaudeStatus] = useState(null);
-  const [tmuxStatus, setTmuxStatus] = useState({ exists: false, attached: false });
-  const [isCheckingTmux, setIsCheckingTmux] = useState(false);
   const provider = localStorage.getItem('selected-provider') || 'claude';
 
   // Memoized diff calculation to prevent recalculating on every render
@@ -99,35 +97,6 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
     };
   }, []);
 
-  // Check tmux status for current session
-  const checkTmuxStatus = useCallback(async () => {
-    if (!selectedSession?.id) {
-      setTmuxStatus({ exists: false, attached: false });
-      return;
-    }
-    
-    setIsCheckingTmux(true);
-    try {
-      const token = safeLocalStorage.getItem('auth-token');
-      const response = await fetch(`/api/sessions/${selectedSession.id}/tmux-status`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
-      if (response.ok) {
-        const status = await response.json();
-        setTmuxStatus(status);
-      } else {
-        setTmuxStatus({ exists: false, attached: false });
-      }
-    } catch (error) {
-      console.error('Failed to check tmux status:', error);
-      setTmuxStatus({ exists: false, attached: false });
-    } finally {
-      setIsCheckingTmux(false);
-    }
-  }, [selectedSession?.id]);
 
   // Load session messages from API with pagination 
   const loadSessionMessages = useCallback(async (projectName, sessionId, loadMore = false) => {
@@ -284,18 +253,6 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
     }
   }, [convertedMessages, sessionMessages]);
 
-  // Check tmux status when session changes
-  useEffect(() => {
-    checkTmuxStatus();
-  }, [checkTmuxStatus]);
-
-  // Periodically check tmux status
-  useEffect(() => {
-    if (!selectedSession?.id) return;
-
-    const interval = setInterval(checkTmuxStatus, 10000); // Check every 10 seconds
-    return () => clearInterval(interval);
-  }, [selectedSession?.id, checkTmuxStatus]);
 
   // Notify parent when input focus changes
   useEffect(() => {
@@ -894,15 +851,6 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
     e.preventDefault();
     if (!input.trim() || isLoading || !selectedProject) return;
 
-    // Check if tmux session is running for this sessionId - prevent chat if shell mode is active
-    if (selectedSession?.id && tmuxStatus.exists) {
-      setChatMessages(prev => [...prev, {
-        type: 'error',
-        content: `⚠️ 该会话正在Shell模式中运行，请先关闭Shell窗口才能继续聊天。\n\n切换到Shell标签页，点击"Close Tmux"按钮关闭终端会话。`,
-        timestamp: new Date()
-      }]);
-      return;
-    }
 
     // Upload images first if any
     let uploadedImages = [];
@@ -1191,6 +1139,15 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
           ref={scrollContainerRef}
           className="flex-1 overflow-y-auto overflow-x-hidden px-0 py-3 sm:p-4 space-y-3 sm:space-y-4 relative"
         >
+          {/* Loading overlay for session switching */}
+          {isLoadingSessionMessages && chatMessages.length > 0 && (
+            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50">
+              <div className="flex items-center justify-center space-x-2 bg-white dark:bg-gray-800 px-4 py-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+                <p className="text-gray-700 dark:text-gray-300">加载中...</p>
+              </div>
+            </div>
+          )}
           {isLoadingSessionMessages && chatMessages.length === 0 ? (
             <div className="text-center text-gray-500 dark:text-gray-400 mt-8">
               <div className="flex items-center justify-center space-x-2">
@@ -1275,15 +1232,6 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
             </>
           )}
           
-          {/* Loading overlay for session switching */}
-          {isLoadingSessionMessages && chatMessages.length > 0 && (
-            <div className="absolute inset-0 bg-white/70 dark:bg-gray-900/70 flex items-center justify-center z-50">
-              <div className="flex items-center justify-center space-x-2 bg-white dark:bg-gray-800 px-4 py-3 rounded-lg shadow-lg">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
-                <p className="text-gray-700 dark:text-gray-300">加载中...</p>
-              </div>
-            </div>
-          )}
 
           {isLoading && (
             <div className="chat-message assistant">
@@ -1372,27 +1320,6 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
             </div>
           </div>
 
-          {/* Tmux Status Warning */}
-          {selectedSession?.id && tmuxStatus.exists && (
-            <div className="max-w-4xl mx-auto mb-4 p-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
-              <div className="flex items-start space-x-3">
-                <svg className="w-5 h-5 text-orange-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                </svg>
-                <div className="flex-1">
-                  <h3 className="text-sm font-medium text-orange-800 dark:text-orange-200">
-                    Shell模式运行中
-                  </h3>
-                  <p className="mt-1 text-sm text-orange-700 dark:text-orange-300">
-                    该会话正在Shell终端中运行。请切换到Shell标签页并关闭tmux会话，然后返回继续聊天。
-                  </p>
-                </div>
-                {isCheckingTmux && (
-                  <div className="w-4 h-4 animate-spin rounded-full border-2 border-orange-500 border-t-transparent"></div>
-                )}
-              </div>
-            </div>
-          )}
 
           <form onSubmit={handleSubmit} className="relative max-w-4xl mx-auto">
             {/* Drag overlay */}
@@ -1479,7 +1406,7 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
                   setIsTextareaExpanded(isExpanded);
                 }}
                 placeholder="Ask Claude to help with your code... (@ to reference files)"
-                disabled={isLoading || (selectedSession?.id && tmuxStatus.exists)}
+                disabled={isLoading}
                 rows={1}
                 className="chat-input-placeholder w-full pl-12 pr-28 sm:pr-40 py-3 sm:py-4 bg-transparent rounded-2xl focus:outline-none text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 disabled:opacity-50 resize-none min-h-[40px] sm:min-h-[56px] max-h-[40vh] sm:max-h-[300px] overflow-y-auto text-sm sm:text-base transition-all duration-200"
                 style={{ height: 'auto' }}
