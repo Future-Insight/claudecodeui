@@ -9,9 +9,55 @@ const spawnFunction = process.platform === 'win32' ? crossSpawn : spawn;
 
 let activeClaudeProcesses = new Map(); // Track active processes by session ID
 
+// Session state management
+let activeSessions = new Map(); // Track session states: { sessionId: { status: 'running'|'idle', startTime, projectPath, lastActivity } }
+
+// Add session state helper functions
+function setSessionActive(sessionId, projectPath) {
+  activeSessions.set(sessionId, {
+    startTime: Date.now(),
+    projectPath: projectPath,
+    lastActivity: Date.now()
+  });
+}
+
+function setSessionIdle(sessionId) {
+  // Remove idle sessions from active list
+  activeSessions.delete(sessionId);
+}
+
+function removeSession(sessionId) {
+  activeSessions.delete(sessionId);
+}
+
+function getSessionStates() {
+  const states = {};
+  for (const [sessionId, state] of activeSessions.entries()) {
+    states[sessionId] = {
+      status: 'running', // All sessions in activeSessions are running
+      startTime: state.startTime,
+      projectPath: state.projectPath,
+      lastActivity: state.lastActivity
+    };
+  }
+  return states;
+}
+
+function getSessionState(sessionId) {
+  const state = activeSessions.get(sessionId);
+  if (state) {
+    return {
+      status: 'running',
+      ...state
+    };
+  }
+  return null; // Session not found = idle/not running
+}
+
 async function spawnClaude(command, options = {}, ws) {
-  return new Promise(async (resolve, reject) => {
-    const { sessionId, projectPath, cwd, resume, toolsSettings, permissionMode, images } = options;
+  return new Promise((resolve, reject) => {
+    (async () => {
+      const { sessionId, projectPath, cwd, resume, toolsSettings, permissionMode, images } = options;
     let capturedSessionId = sessionId; // Track session ID throughout the process
     let sessionCreatedSent = false; // Track if we've already sent session-created event
     
@@ -249,6 +295,10 @@ async function spawnClaude(command, options = {}, ws) {
     const processKey = capturedSessionId || sessionId || Date.now().toString();
     activeClaudeProcesses.set(processKey, claudeProcess);
     
+    // Note: Both new sessions and resume sessions will generate new session IDs
+    // We should only set session as active when we receive the real session ID from Claude's response
+    // Don't set any session as active here - wait for Claude's response with the actual session ID
+    
     // Handle stdout (streaming JSON responses)
     claudeProcess.stdout.on('data', (data) => {
       const rawOutput = data.toString();
@@ -272,8 +322,19 @@ async function spawnClaude(command, options = {}, ws) {
               activeClaudeProcesses.set(capturedSessionId, claudeProcess);
             }
             
-            // Send session-created event only once for new sessions
-            if (!sessionId && !sessionCreatedSent) {
+            // Set session as active with the real session ID from Claude
+            setSessionActive(capturedSessionId, projectPath);
+            
+            // Send session status update for the real session ID
+            ws.send(JSON.stringify({
+              type: 'session-status',
+              sessionId: capturedSessionId,
+              status: 'running',
+              projectPath: projectPath
+            }));
+            
+            // Send session-created event (for both new sessions and resume that gets new ID)
+            if (!sessionCreatedSent) {
               sessionCreatedSent = true;
               ws.send(JSON.stringify({
                 type: 'session-created',
@@ -315,6 +376,17 @@ async function spawnClaude(command, options = {}, ws) {
       const finalSessionId = capturedSessionId || sessionId || processKey;
       activeClaudeProcesses.delete(finalSessionId);
       
+      // Remove session from active list (session completed)
+      if (finalSessionId) {
+        setSessionIdle(finalSessionId);
+        // Send session status update
+        ws.send(JSON.stringify({
+          type: 'session-status',
+          sessionId: finalSessionId,
+          status: 'completed'
+        }));
+      }
+      
       ws.send(JSON.stringify({
         type: 'claude-complete',
         exitCode: code,
@@ -350,6 +422,11 @@ async function spawnClaude(command, options = {}, ws) {
       const finalSessionId = capturedSessionId || sessionId || processKey;
       activeClaudeProcesses.delete(finalSessionId);
       
+      // Remove session from active list on error
+      if (finalSessionId) {
+        setSessionIdle(finalSessionId);
+      }
+      
       ws.send(JSON.stringify({
         type: 'claude-error',
         error: error.message
@@ -371,6 +448,7 @@ async function spawnClaude(command, options = {}, ws) {
       }
       // If no command provided, stdin stays open for interactive use
     }
+    })().catch(reject);
   });
 }
 
@@ -387,5 +465,10 @@ function abortClaudeSession(sessionId) {
 
 export {
   spawnClaude,
-  abortClaudeSession
+  abortClaudeSession,
+  getSessionStates,
+  getSessionState,
+  setSessionActive,
+  setSessionIdle,
+  removeSession
 };

@@ -4,13 +4,11 @@ import { cn } from '../lib/utils';
 function ClaudeStatus({ status, onAbort, isLoading, provider = 'claude' }) {
   const [elapsedTime, setElapsedTime] = useState(0);
   const [animationPhase, setAnimationPhase] = useState(0);
-  const [fakeTokens, setFakeTokens] = useState(0);
   
   // Update elapsed time every second
   useEffect(() => {
     if (!isLoading) {
       setElapsedTime(0);
-      setFakeTokens(0);
       return;
     }
     
@@ -18,8 +16,6 @@ function ClaudeStatus({ status, onAbort, isLoading, provider = 'claude' }) {
     const timer = setInterval(() => {
       const elapsed = Math.floor((Date.now() - startTime) / 1000);
       setElapsedTime(elapsed);
-      // Simulate token count increasing over time (roughly 30-50 tokens per second)
-      setFakeTokens(Math.floor(elapsed * (30 + Math.random() * 20)));
     }, 1000);
     
     return () => clearInterval(timer);
@@ -44,7 +40,6 @@ function ClaudeStatus({ status, onAbort, isLoading, provider = 'claude' }) {
   
   // Parse status data
   const statusText = status?.text || actionWords[actionIndex];
-  const tokens = status?.tokens || fakeTokens;
   const canInterrupt = status?.can_interrupt !== false;
   
   // Animation characters
@@ -69,13 +64,6 @@ function ClaudeStatus({ status, onAbort, isLoading, provider = 'claude' }) {
               <div className="flex items-center gap-2">
                 <span className="font-medium text-sm">{statusText}...</span>
                 <span className="text-gray-400 text-sm">({elapsedTime}s)</span>
-                {tokens > 0 && (
-                  <>
-                    <span className="text-gray-400">·</span>
-                    <span className="text-gray-300 text-sm hidden sm:inline">⚒ {tokens.toLocaleString()} tokens</span>
-                    <span className="text-gray-300 text-sm sm:hidden">⚒ {tokens.toLocaleString()}</span>
-                  </>
-                )}
                 <span className="text-gray-400 hidden sm:inline">·</span>
                 <span className="text-gray-300 text-sm hidden sm:inline">esc to interrupt</span>
               </div>

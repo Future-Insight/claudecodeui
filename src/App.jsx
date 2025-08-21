@@ -46,6 +46,7 @@ function AppContent() {
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
   const [selectedSession, setSelectedSession] = useState(null);
+  const [sessionStates, setSessionStates] = useState(new Map()); // Track running sessions
   // Track active tab per project - each project remembers its own tab state
   const [projectTabs, setProjectTabs] = useState({}); // project.name -> activeTab
   const activeTab = selectedProject ? (projectTabs[selectedProject.name] || 'chat') : 'chat';
@@ -99,9 +100,34 @@ function AppContent() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  // Load session states from server
+  const loadSessionStates = async () => {
+    try {
+      const response = await authenticatedFetch('/api/session-states');
+      if (response.ok) {
+        const data = await response.json();
+        const statesMap = new Map();
+        
+        for (const [sessionId, state] of Object.entries(data.sessionStates || {})) {
+          statesMap.set(sessionId, {
+            status: 'running',
+            projectPath: state.projectPath,
+            startTime: state.startTime,
+            lastActivity: state.lastActivity
+          });
+        }
+        
+        setSessionStates(statesMap);
+      }
+    } catch (error) {
+      console.error('Error loading session states:', error);
+    }
+  };
+
   useEffect(() => {
-    // Fetch projects on component mount
+    // Fetch projects and session states on component mount
     fetchProjects();
+    loadSessionStates();
   }, []);
 
   // Helper function to determine if an update is purely additive (new sessions/projects)
@@ -193,6 +219,26 @@ function AppContent() {
               // Don't update if session still exists with same ID - prevents reload
             }
           }
+        }
+      } else if (latestMessage.type === 'session-status') {
+        // Handle session status updates
+        const statusUpdate = latestMessage.data || latestMessage;
+        if (statusUpdate.sessionId) {
+          setSessionStates(prev => {
+            const updated = new Map(prev);
+            if (statusUpdate.status === 'running') {
+              // Add or update running session
+              updated.set(statusUpdate.sessionId, {
+                status: 'running',
+                projectPath: statusUpdate.projectPath,
+                lastUpdate: Date.now()
+              });
+            } else if (statusUpdate.status === 'completed') {
+              // Remove completed session
+              updated.delete(statusUpdate.sessionId);
+            }
+            return updated;
+          });
         }
       }
     }
@@ -533,6 +579,7 @@ function AppContent() {
               latestVersion={latestVersion}
               currentVersion={currentVersion}
               onShowVersionModal={() => setShowVersionModal(true)}
+              sessionStates={sessionStates}
             />
           </div>
         </div>
@@ -578,6 +625,7 @@ function AppContent() {
               latestVersion={latestVersion}
               currentVersion={currentVersion}
               onShowVersionModal={() => setShowVersionModal(true)}
+              sessionStates={sessionStates}
             />
           </div>
         </div>

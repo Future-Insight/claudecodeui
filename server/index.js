@@ -39,7 +39,7 @@ import mime from 'mime-types';
 const execAsync = promisify(exec);
 
 import { getProjects, getSessions, getSessionMessages, renameProject, deleteSession, deleteProject, addProjectManually, extractProjectDirectory, clearProjectDirectoryCache } from './projects.js';
-import { spawnClaude, abortClaudeSession } from './claude-cli.js';
+import { spawnClaude, abortClaudeSession, getSessionStates, getSessionState } from './claude-cli.js';
 import gitRoutes from './routes/git.js';
 import authRoutes from './routes/auth.js';
 import mcpRoutes from './routes/mcp.js';
@@ -238,6 +238,31 @@ app.get('/api/projects/:projectName/sessions/:sessionId/messages', authenticateT
         } else {
             // New format with pagination info
             res.json(result);
+        }
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get all active session states
+app.get('/api/session-states', authenticateToken, (req, res) => {
+    try {
+        const states = getSessionStates();
+        res.json({ sessionStates: states });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get specific session state
+app.get('/api/session-states/:sessionId', authenticateToken, (req, res) => {
+    try {
+        const { sessionId } = req.params;
+        const state = getSessionState(sessionId);
+        if (state) {
+            res.json({ sessionId, ...state });
+        } else {
+            res.status(404).json({ error: 'Session not found' });
         }
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -483,6 +508,12 @@ function handleChatConnection(ws) {
                 console.log('📁 Project:', data.options?.projectPath || 'Unknown');
                 console.log('🔄 Session:', data.options?.sessionId ? 'Resume' : 'New');
                 await spawnClaude(data.command, data.options, ws);
+
+                // 发送会话完成消息 (不再需要，claude-cli.js中已经处理)
+                // ws.send(JSON.stringify({
+                //     type: 'session-complete',
+                //     sessionId: data.options?.sessionId
+                // }));
             } else if (data.type === 'abort-session') {
                 console.log('🛑 Abort session request:', data.sessionId);
                 const provider = data.provider || 'claude';
@@ -544,7 +575,7 @@ function handleShellConnection(ws) {
                     shellManager.attachWebSocket(projectPath, ws);
 
                     // 发送欢迎消息
-                    const welcomeMsg = isNew ? 
+                    const welcomeMsg = isNew ?
                         `\x1b[36m🚀 Started new persistent Claude session\x1b[0m\r\n` :
                         `\x1b[36m🔄 Reconnected to existing Claude session\x1b[0m\r\n`;
 
@@ -596,7 +627,7 @@ function handleShellConnection(ws) {
 
     ws.on('close', () => {
         console.log('🔌 Shell client disconnected');
-        
+
         // 断开WebSocket但保持shell进程运行
         if (currentProjectPath) {
             shellManager.detachWebSocket(currentProjectPath);
@@ -605,7 +636,7 @@ function handleShellConnection(ws) {
 
     ws.on('error', (error) => {
         console.error('❌ Shell WebSocket error:', error);
-        
+
         // 发生错误时也要断开连接
         if (currentProjectPath) {
             shellManager.detachWebSocket(currentProjectPath);
@@ -705,7 +736,7 @@ app.get('/api/projects/:projectName/shell-status', authenticateToken, async (req
     try {
         const { projectName } = req.params;
         const projectPath = await extractProjectDirectory(projectName);
-        
+
         const status = shellManager.getSessionStatus(projectPath);
         res.json(status);
     } catch (error) {
@@ -720,7 +751,7 @@ app.delete('/api/projects/:projectName/shell', authenticateToken, async (req, re
         const { projectName } = req.params;
         const { force = false } = req.query;
         const projectPath = await extractProjectDirectory(projectName);
-        
+
         const success = shellManager.killSession(projectPath, force === 'true');
         res.json({ success });
     } catch (error) {

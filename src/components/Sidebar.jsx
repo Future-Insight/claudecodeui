@@ -51,7 +51,8 @@ function Sidebar({
   updateAvailable,
   latestVersion,
   currentVersion,
-  onShowVersionModal
+  onShowVersionModal,
+  sessionStates = new Map() // Map of running sessions
 }) {
   const navigate = useNavigate();
   const [expandedProjects, setExpandedProjects] = useState(new Set());
@@ -1015,10 +1016,8 @@ function Sidebar({
                         getAllSessions(project).map((session) => {
                           // Handle Claude session format
                           
-                          // Calculate if session is active (within last 10 minutes)
-                          const sessionDate = new Date(session.lastActivity);
-                          const diffInMinutes = Math.floor((currentTime - sessionDate) / (1000 * 60));
-                          const isActive = diffInMinutes < 10;
+                          // Check if session is currently running
+                          const isRunning = sessionStates.has(session.id);
                           
                           // Get session display values
                           const sessionName = session.summary || 'New Session';
@@ -1027,10 +1026,10 @@ function Sidebar({
                           
                           return (
                           <div key={session.id} className="group relative">
-                            {/* Active session indicator dot */}
-                            {isActive && (
+                            {/* Running session indicator dot */}
+                            {isRunning && (
                               <div className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-1">
-                                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
                               </div>
                             )}
                             {/* Mobile Session Item */}
@@ -1039,7 +1038,7 @@ function Sidebar({
                                 className={cn(
                                   "p-2 mx-3 my-0.5 rounded-md bg-card border active:scale-[0.98] transition-all duration-150 relative",
                                   selectedSession?.id === session.id ? "bg-primary/15 border-primary/40 shadow-md ring-1 ring-primary/20" :
-                                  isActive ? "border-green-500/30 bg-green-50/5 dark:bg-green-900/5" : "border-border/30"
+                                  isRunning ? "border-green-500/30 bg-green-50/5 dark:bg-green-900/5" : "border-border/30"
                                 )}
                                 onClick={() => {
                                   onProjectSelect(project);

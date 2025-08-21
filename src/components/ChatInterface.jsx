@@ -76,7 +76,39 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
   const [isTextareaExpanded, setIsTextareaExpanded] = useState(false);
   const [visibleMessageCount, setVisibleMessageCount] = useState(100);
   const [claudeStatus, setClaudeStatus] = useState(null);
+  const [sessionStates, setSessionStates] = useState(new Map()); // Track all session states
   const provider = localStorage.getItem('selected-provider') || 'claude';
+
+  // Load session states from server
+  const loadSessionStates = useCallback(async () => {
+    try {
+      const token = safeLocalStorage.getItem('auth-token');
+      const response = await fetch('/api/session-states', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        const statesMap = new Map();
+        
+        for (const [sessionId, state] of Object.entries(data.sessionStates)) {
+          statesMap.set(sessionId, state);
+        }
+        
+        setSessionStates(statesMap);
+        
+        // Check if current session is running
+        if (currentSessionId && statesMap.has(currentSessionId)) {
+          // If session is in the map, it's running
+          setIsLoading(true);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading session states:', error);
+    }
+  }, [currentSessionId]);
 
   // Memoized diff calculation to prevent recalculating on every render
   const createDiff = useMemo(() => {
@@ -200,6 +232,11 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
     }
   }, [isNearBottom, hasMoreMessages, isLoadingMoreMessages, selectedSession, selectedProject, loadSessionMessages]);
 
+  // Load session states on component mount
+  useEffect(() => {
+    loadSessionStates();
+  }, [loadSessionStates]);
+  
   useEffect(() => {
     // Load session messages when session changes
     const loadMessages = async () => {
@@ -617,6 +654,45 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
             setClaudeStatus(statusInfo);
             setIsLoading(true);
             setCanAbortSession(statusInfo.can_interrupt);
+          }
+          break;
+
+        case 'session-status':
+          // Handle session status updates
+          const statusUpdate = latestMessage.data || latestMessage;
+          if (statusUpdate.sessionId) {
+            setSessionStates(prev => {
+              const updated = new Map(prev);
+              if (statusUpdate.status === 'running') {
+                // Add or update running session
+                updated.set(statusUpdate.sessionId, {
+                  status: statusUpdate.status,
+                  projectPath: statusUpdate.projectPath,
+                  lastUpdate: Date.now()
+                });
+              } else if (statusUpdate.status === 'completed') {
+                // Remove completed session
+                updated.delete(statusUpdate.sessionId);
+              }
+              return updated;
+            });
+            
+            // Update current session loading state based on its status
+            if (statusUpdate.sessionId === currentSessionId) {
+              if (statusUpdate.status === 'running') {
+                setIsLoading(true);
+              } else if (statusUpdate.status === 'completed') {
+                setIsLoading(false);
+                setCanAbortSession(false);
+                setClaudeStatus(null);
+                // Remove completed session from state
+                setSessionStates(prev => {
+                  const updated = new Map(prev);
+                  updated.delete(statusUpdate.sessionId);
+                  return updated;
+                });
+              }
+            }
           }
           break;
 
@@ -1144,7 +1220,7 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
             <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[100]">
               <div className="flex items-center justify-center space-x-2 bg-white dark:bg-gray-800 px-4 py-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600">
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
-                <p className="text-gray-700 dark:text-gray-300">加载中...</p>
+                <p className="text-gray-700 dark:text-gray-300">切换会话中...</p>
               </div>
             </div>
           )}
@@ -1152,7 +1228,7 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
             <div className="text-center text-gray-500 dark:text-gray-400 mt-8">
               <div className="flex items-center justify-center space-x-2">
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400"></div>
-                <p>Loading session messages...</p>
+                <p>加载会话消息...</p>
               </div>
             </div>
           ) : chatMessages.length === 0 ? (
@@ -1182,7 +1258,7 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
                 <div className="text-center text-gray-500 dark:text-gray-400 py-3">
                   <div className="flex items-center justify-center space-x-2">
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400"></div>
-                    <p className="text-sm">Loading older messages...</p>
+                    <p className="text-sm">加载更多消息...</p>
                   </div>
                 </div>
               )}
@@ -1192,8 +1268,8 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
                 <div className="text-center text-gray-500 dark:text-gray-400 text-sm py-2 border-b border-gray-200 dark:border-gray-700">
                   {totalMessages > 0 && (
                     <span>
-                      Showing {sessionMessages.length} of {totalMessages} messages •
-                      <span className="text-xs">Scroll up to load more</span>
+                      显示 {sessionMessages.length} / {totalMessages} 条消息 •
+                      <span className="text-xs">向上滚动加载更多</span>
                     </span>
                   )}
                 </div>
@@ -1202,12 +1278,12 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
               {/* Legacy message count indicator (for non-paginated view) */}
               {!hasMoreMessages && chatMessages.length > visibleMessageCount && (
                 <div className="text-center text-gray-500 dark:text-gray-400 text-sm py-2 border-b border-gray-200 dark:border-gray-700">
-                  Showing last {visibleMessageCount} messages ({chatMessages.length} total) •
+                  显示最近 {visibleMessageCount} 条消息（共 {chatMessages.length} 条）•
                   <button
                     className="ml-1 text-blue-600 hover:text-blue-700 underline"
                     onClick={loadEarlierMessages}
                   >
-                    Load earlier messages
+                    加载更早的消息
                   </button>
                 </div>
               )}
@@ -1248,7 +1324,7 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
                     <div className="animate-pulse">●</div>
                     <div className="animate-pulse" style={{ animationDelay: '0.2s' }}>●</div>
                     <div className="animate-pulse" style={{ animationDelay: '0.4s' }}>●</div>
-                    <span className="ml-2">Thinking...</span>
+                    <span className="ml-2">思考中...</span>
                   </div>
                 </div>
               </div>
