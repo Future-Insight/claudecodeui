@@ -121,7 +121,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                       <div className="mt-2 grid grid-cols-2 gap-2">
                         {message.images.map((img, idx) => (
                           <img
-                            key={idx}
+                            key={`img-${idx}-${img.name || 'unnamed'}`}
                             src={img.data}
                             alt={img.name}
                             className="rounded-lg max-w-full h-auto cursor-pointer hover:opacity-90 transition-opacity"
@@ -202,7 +202,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                               </div>
                               <div className="text-xs font-mono">
                                 {createDiff(input.old_string, input.new_string).map((diffLine, i) => (
-                                  <div key={i} className="flex">
+                                  <div key={`diff-${i}-${diffLine.type}-${diffLine.content.slice(0, 20)}`} className="flex">
                                     <span className={`w-8 text-center border-r ${diffLine.type === 'removed'
                                       ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800'
                                       : 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 border-green-200 dark:border-green-800'
@@ -303,7 +303,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                                 </div>
                                 <div className="text-xs font-mono">
                                   {createDiff('', input.content).map((diffLine, i) => (
-                                    <div key={i} className="flex">
+                                    <div key={`write-diff-${i}-${diffLine.type}-${diffLine.content.slice(0, 20)}`} className="flex">
                                       <span className={`w-8 text-center border-r ${diffLine.type === 'removed'
                                         ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800'
                                         : 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 border-green-200 dark:border-green-800'
@@ -422,6 +422,104 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                     }
                   }
 
+                  // Special handling for MultiEdit tool
+                  if (message.toolName === 'MultiEdit') {
+                    try {
+                      const input = JSON.parse(message.toolInput);
+                      if (input.file_path) {
+                        const filename = input.file_path.split('/').pop();
+                        const editCount = input.edits ? input.edits.length : 0;
+
+                        return (
+                          <details className="mt-2" open={autoExpandTools}>
+                            <summary className="text-sm text-gray-600 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300 flex items-center gap-2">
+                              <svg className="w-4 h-4 transition-transform details-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                              📝 MultiEdit - {editCount} 个修改:
+                              <span className="text-blue-600 dark:text-blue-400 font-mono">
+                                {filename}
+                              </span>
+                            </summary>
+                            <div className="mt-3">
+                              <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                                <div className="flex items-center justify-between px-3 py-2 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                                  <button
+                                    onClick={() => {
+                                      // Create a combined diff for all edits
+                                      const allEdits = input.edits || [];
+                                      const combinedOld = allEdits.map(edit => edit.old_string).join('\n---\n');
+                                      const combinedNew = allEdits.map(edit => edit.new_string).join('\n---\n');
+                                      onFileOpen && onFileOpen(input.file_path, {
+                                        old_string: combinedOld,
+                                        new_string: combinedNew
+                                      });
+                                    }}
+                                    className="text-xs font-mono text-blue-600 dark:text-blue-400 hover:text-gray-600 dark:hover:text-gray-300 truncate underline cursor-pointer"
+                                  >
+                                    {input.file_path}
+                                  </button>
+                                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                                    {editCount} 个修改
+                                  </span>
+                                </div>
+                                <div className="p-3">
+                                  <div className="text-xs text-gray-600 dark:text-gray-400 mb-3">
+                                    对文件进行 {editCount} 个连续修改：
+                                  </div>
+                                  <div className="space-y-2">
+                                    {input.edits && input.edits.map((edit, index) => (
+                                      <div key={`multiedit-${index}`} className="bg-gray-100 dark:bg-gray-800 rounded p-2">
+                                        <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                          修改 #{index + 1}
+                                        </div>
+                                        <div className="text-xs font-mono">
+                                          {createDiff(edit.old_string, edit.new_string).slice(0, 3).map((diffLine, i) => (
+                                            <div key={`multiedit-diff-${index}-${i}`} className="flex">
+                                              <span className={`w-8 text-center border-r ${diffLine.type === 'removed'
+                                                ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800'
+                                                : 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 border-green-200 dark:border-green-800'
+                                                }`}>
+                                                {diffLine.type === 'removed' ? '-' : '+'}
+                                              </span>
+                                              <span className={`px-2 py-0.5 flex-1 whitespace-pre-wrap truncate ${diffLine.type === 'removed'
+                                                ? 'bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-200'
+                                                : 'bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-200'
+                                                }`}>
+                                                {diffLine.content.length > 60 ? diffLine.content.slice(0, 60) + '...' : diffLine.content}
+                                              </span>
+                                            </div>
+                                          ))}
+                                          {createDiff(edit.old_string, edit.new_string).length > 3 && (
+                                            <div className="text-xs text-gray-500 dark:text-gray-400 italic mt-1">
+                                              ... 还有 {createDiff(edit.old_string, edit.new_string).length - 3} 行更改
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                              {showRawParameters && (
+                                <details className="mt-2" open={autoExpandTools}>
+                                  <summary className="text-xs text-blue-600 dark:text-blue-400 cursor-pointer hover:text-gray-600 dark:hover:text-gray-300">
+                                    View raw parameters
+                                  </summary>
+                                  <pre className="mt-2 text-xs bg-gray-100 dark:bg-gray-800/30 p-2 rounded whitespace-pre-wrap break-words overflow-hidden text-gray-700 dark:text-gray-300">
+                                    {message.toolInput}
+                                  </pre>
+                                </details>
+                              )}
+                            </div>
+                          </details>
+                        );
+                      }
+                    } catch (e) {
+                      // Fall back to regular display
+                    }
+                  }
+
                   // Special handling for Read tool
                   if (message.toolName === 'Read') {
                     try {
@@ -446,8 +544,8 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                     }
                   }
 
-                  // Special handling for exit_plan_mode tool
-                  if (message.toolName === 'exit_plan_mode') {
+                  // Special handling for ExitPlanMode tool
+                  if (message.toolName === 'ExitPlanMode') {
                     try {
                       const input = JSON.parse(message.toolInput);
                       if (input.plan) {
@@ -554,12 +652,18 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                           }
                         }
 
-                        // Special handling for exit_plan_mode tool results
-                        if (message.toolName === 'exit_plan_mode') {
+                        // Special handling for ExitPlanMode tool results
+                        if (message.toolName === 'ExitPlanMode') {
                           try {
-                            // The content should be JSON with a "plan" field
-                            const parsed = JSON.parse(content);
-                            if (parsed.plan) {
+                            // Check if content is already JSON or needs to be parsed
+                            let parsed = null;
+                            if (typeof content === 'string' && content.trim().startsWith('{')) {
+                              parsed = JSON.parse(content);
+                            } else if (typeof content === 'object' && content !== null) {
+                              parsed = content;
+                            }
+                            
+                            if (parsed && parsed.plan) {
                               // Replace escaped newlines with actual newlines
                               const planContent = parsed.plan.replace(/\\n/g, '\n');
                               return (
@@ -572,9 +676,12 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                                   </div>
                                 </div>
                               );
+                            } else {
+                              // Handle non-JSON responses like "Exit plan mode?" - don't display anything
+                              return null;
                             }
                           } catch (e) {
-                            // Fall through to regular handling
+                            // Fall through to regular handling for any parsing errors
                           }
                         }
 
@@ -628,9 +735,9 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
 
                                     {/* Option buttons */}
                                     <div className="space-y-2 mb-4">
-                                      {options.map((option) => (
+                                      {options.map((option, optionIdx) => (
                                         <button
-                                          key={option.number}
+                                          key={`option-${option.number}-${optionIdx}`}
                                           className={`w-full text-left px-4 py-3 rounded-lg border-2 transition-all ${selectedOption === option.number
                                             ? 'bg-amber-600 dark:bg-amber-700 text-white border-amber-600 dark:border-amber-700 shadow-md'
                                             : 'bg-white dark:bg-gray-800 text-amber-900 dark:text-amber-100 border-amber-300 dark:border-amber-700 hover:border-amber-400 dark:hover:border-amber-600 hover:shadow-sm'
@@ -805,9 +912,9 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
 
                           {/* Option buttons */}
                           <div className="space-y-2 mb-4">
-                            {options.map((option) => (
+                            {options.map((option, optionIdx) => (
                               <button
-                                key={option.number}
+                                key={`interactive-option-${option.number}-${optionIdx}`}
                                 className={`w-full text-left px-4 py-3 rounded-lg border-2 transition-all ${option.isSelected
                                   ? 'bg-amber-600 dark:bg-amber-700 text-white border-amber-600 dark:border-amber-700 shadow-md'
                                   : 'bg-white dark:bg-gray-800 text-amber-900 dark:text-amber-100 border-amber-300 dark:border-amber-700'

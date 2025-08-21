@@ -394,7 +394,7 @@ function Sidebar({
 
     try {
       const currentSessionCount = (project.sessions?.length || 0) + (additionalSessions[project.name]?.length || 0);
-      const response = await api.sessions(project.name, 5, currentSessionCount);
+      const response = await api.sessions(project.name, 10, currentSessionCount);
       
       if (response.ok) {
         const result = await response.json();
@@ -758,10 +758,8 @@ function Sidebar({
                                   </h3>
                                   <p className="text-xs text-muted-foreground">
                                     {(() => {
-                                      const sessionCount = getAllSessions(project).length;
-                                      const hasMore = project.sessionMeta?.hasMore !== false;
-                                      const count = hasMore && sessionCount >= 5 ? `${sessionCount}+` : sessionCount;
-                                      return `${count} session${count === 1 ? '' : 's'}`;
+                                      const sessionCount = project.sessionMeta?.total ?? 0;
+                                      return `${sessionCount} session${sessionCount === 1 ? '' : 's'}`;
                                     })()}
                                   </p>
                                 </>
@@ -898,11 +896,7 @@ function Sidebar({
                                 {project.displayName}
                               </div>
                               <div className="text-xs text-muted-foreground">
-                                {(() => {
-                                  const sessionCount = getAllSessions(project).length;
-                                  const hasMore = project.sessionMeta?.hasMore !== false;
-                                  return hasMore && sessionCount >= 5 ? `${sessionCount}+` : sessionCount;
-                                })()}
+                                {project.sessionMeta?.total ?? 0}
                                 {project.fullPath !== project.displayName && (
                                   <span className="ml-1 opacity-60" title={project.fullPath}>
                                     • {project.fullPath.length > 25 ? '...' + project.fullPath.slice(-22) : project.fullPath}
