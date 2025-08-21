@@ -1,0 +1,28 @@
+version: '3.8'
+
+# Development overrides for docker-compose.yml
+services:
+  claude-code-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder  # Use builder stage for development
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - LOG_LEVEL=debug
+      - LOG_REQUESTS=true
+    volumes:
+      # Mount source code for hot reload (if needed)
+      - ./server:/app/server
+      - ./src:/app/src
+      # Development database (separate from production)
+      - claude_dev_data:/app/data
+    command: ["npm", "run", "dev"]
+    ports:
+      - "3001:3001"
+      - "5173:5173"  # Vite dev server port
+
+volumes:
+  claude_dev_data:
+    driver: local

@@ -1,0 +1,46 @@
+version: '3.8'
+
+# Production overrides for docker-compose.yml
+services:
+  claude-code-ui:
+    restart: always
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - LOG_LEVEL=warn
+      - LOG_REQUESTS=false
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api/auth/status"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  nginx:
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+          cpus: '0.25'
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
