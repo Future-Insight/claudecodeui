@@ -312,7 +312,6 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
           break;
         //JSON格式输出
         case 'claude-response':
-          console.log("======client Received claude-response message:", latestMessage);
           const messageData = latestMessage.data.message || latestMessage.data;
 
           // Handle streaming format (content_block_delta / content_block_stop)
@@ -544,10 +543,6 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
             }
           }
 
-          // Clear persisted chat messages after successful completion
-          if (selectedProject && latestMessage.exitCode === 0) {
-            safeLocalStorage.removeItem(`chat_messages_${selectedProject.name}`);
-          }
           break;
 
         case 'session-aborted':

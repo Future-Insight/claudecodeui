@@ -148,6 +148,7 @@ function AppContent() {
               const updatedSelectedSession = updatedSelectedProject.sessions?.find(s => s.id === selectedSession.id);
               if (!updatedSelectedSession) {
                 // Session was deleted
+                localStorage.removeItem(`chat_messages_${selectedSession.id}`);
                 setSelectedSession(null);
               }
               // Don't update if session still exists with same ID - prevents reload
@@ -233,7 +234,7 @@ function AppContent() {
         if (session) {
           setSelectedProject(project);
           setSelectedSession({ ...session, __provider: 'claude' });
-          console.log("setSelectedSession({ ...session, __provider: 'claude' });");
+          // console.log("setSelectedSession({ ...session, __provider: 'claude' });");
           // 总是导航到chat
           // Only switch to chat tab if we're loading a different session
           //if (shouldSwitchTab) {

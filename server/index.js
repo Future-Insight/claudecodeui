@@ -89,11 +89,14 @@ async function setupProjectsWatcher() {
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(async () => {
                 try {
+                    //console.log(`--SetupProjectsWatcher File ${eventType}:`, filePath);
 
                     // Clear project directory cache when files change
                     clearProjectDirectoryCache();
 
                     // Get updated projects list
+                    //filePath /home/test/.claude/projects/-home-test-codes-single-book/38045670-f26a-4c33-876e-6e06c2dab350.jsonl
+                    //todo 这里还可以优化,只更新文件目录project的内容
                     const updatedProjects = await getProjects();
 
                     // Notify all connected clients about the project changes
@@ -296,9 +299,9 @@ app.post('/api/cleanup-old-sessions', authenticateToken, async (req, res) => {
     try {
         const { projectName } = req.body; // Get project name from request body
         const result = await deleteOldSessions(projectName);
-        res.json({ 
-            success: true, 
-            ...result 
+        res.json({
+            success: true,
+            ...result
         });
     } catch (error) {
         console.error('Cleanup error:', error);
