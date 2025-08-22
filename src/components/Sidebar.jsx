@@ -185,7 +185,7 @@ function Sidebar({
           newLoaded.add(project.name);
         }
       });
-      
+
       // Only update if the set actually changed
       setInitialSessionsLoaded(prev => {
         const prevArray = Array.from(prev).sort();
@@ -1332,7 +1332,7 @@ function Sidebar({
                           disabled={isCleaningOldSessions}
                           title="清理24小时前的旧会话"
                         >
-                          <X className={`w-3 h-3 ${isCleaningOldSessions ? 'animate-pulse' : ''}`} />
+                          <RotateCcw className={`w-3 h-3 ${isCleaningOldSessions ? 'animate-pulse' : ''}`} />
                         </Button>
                       </div>
                     </div>
