@@ -625,7 +625,110 @@ async function addProjectManually(projectPath, displayName = null) {
   };
 }
 
+// Delete sessions older than 24 hours for specific project or all projects
+async function deleteOldSessions(targetProjectName = null) {
+  const projectsDir = path.join(process.env.HOME, '.claude', 'projects');
+  
+  try {
+    // Check if projects directory exists
+    try {
+      await fs.access(projectsDir);
+    } catch (error) {
+      console.log('No .claude projects directory found');
+      return { deletedSessions: 0, cleanedProjects: 0 };
+    }
 
+    let projects;
+    if (targetProjectName) {
+      // Only clean specific project
+      projects = [targetProjectName];
+    } else {
+      // Clean all projects
+      projects = await fs.readdir(projectsDir);
+    }
+
+    let totalDeletedSessions = 0;
+    let cleanedProjects = 0;
+    const cutoffTime = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24 hours ago
+
+    for (const projectName of projects) {
+      const projectDir = path.join(projectsDir, projectName);
+      
+      // Check if project directory exists and is a directory
+      try {
+        const stat = await fs.stat(projectDir);
+        if (!stat.isDirectory()) continue;
+      } catch (error) {
+        // Project directory doesn't exist, skip
+        continue;
+      }
+
+      let projectDeletedFiles = 0;
+
+      // Check for JSONL files
+      const files = await fs.readdir(projectDir);
+      
+      for (const file of files) {
+        if (file.endsWith('.jsonl')) {
+          const jsonlFile = path.join(projectDir, file);
+          
+          try {
+            // Check file modification time and size
+            const stats = await fs.stat(jsonlFile);
+            const fileModTime = stats.mtime;
+            const fileSize = stats.size;
+            
+            // If file is older than 24 hours or empty, delete it entirely
+            if (fileModTime < cutoffTime || fileSize === 0) {
+              await fs.unlink(jsonlFile);
+              projectDeletedFiles++;
+              const reason = fileSize === 0 ? 'empty' : 'old';
+              console.log(`🗑️  Deleted ${reason} JSONL file: ${jsonlFile}`);
+            }
+          } catch (error) {
+            console.error(`Error processing JSONL file ${jsonlFile}:`, error);
+          }
+        }
+      }
+
+      // Also clean up old session directories
+      const sessionsDir = path.join(projectDir, 'sessions');
+      try {
+        const sessionDirs = await fs.readdir(sessionsDir);
+        for (const sessionDir of sessionDirs) {
+          const sessionPath = path.join(sessionsDir, sessionDir);
+          try {
+            const stats = await fs.stat(sessionPath);
+            if (stats.isDirectory() && stats.mtime < cutoffTime) {
+              await fs.rm(sessionPath, { recursive: true, force: true });
+              console.log(`🗑️  Deleted old session directory: ${sessionPath}`);
+            }
+          } catch (sessionError) {
+            // Session directory might not exist or have access issues, that's okay
+          }
+        }
+      } catch (sessionsError) {
+        // Sessions directory might not exist, that's okay
+      }
+
+      totalDeletedSessions += projectDeletedFiles;
+      if (projectDeletedFiles > 0) {
+        cleanedProjects++;
+      }
+    }
+
+    const scope = targetProjectName ? `project: ${targetProjectName}` : `${cleanedProjects} projects`;
+    console.log(`🗑️  Cleanup complete: ${totalDeletedSessions} files deleted from ${scope}`);
+    return { 
+      deletedSessions: totalDeletedSessions, 
+      cleanedProjects: cleanedProjects,
+      cutoffTime: cutoffTime.toISOString()
+    };
+  } catch (error) {
+    console.error('Error during session cleanup:', error);
+    throw error;
+  }
+}
 
 export {
   getProjects,
@@ -634,6 +737,7 @@ export {
   parseJsonlSessions,
   renameProject,
   deleteSession,
+  deleteOldSessions,
   isProjectEmpty,
   deleteProject,
   addProjectManually,

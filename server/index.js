@@ -38,7 +38,7 @@ import mime from 'mime-types';
 
 const execAsync = promisify(exec);
 
-import { getProjects, getSessions, getSessionMessages, renameProject, deleteSession, deleteProject, addProjectManually, extractProjectDirectory, clearProjectDirectoryCache } from './projects.js';
+import { getProjects, getSessions, getSessionMessages, renameProject, deleteSession, deleteOldSessions, deleteProject, addProjectManually, extractProjectDirectory, clearProjectDirectoryCache } from './projects.js';
 import { spawnClaude, abortClaudeSession, getSessionStates, getSessionState } from './claude-cli.js';
 import gitRoutes from './routes/git.js';
 import authRoutes from './routes/auth.js';
@@ -287,6 +287,21 @@ app.delete('/api/projects/:projectName/sessions/:sessionId', authenticateToken, 
         await deleteSession(projectName, sessionId);
         res.json({ success: true });
     } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Cleanup old sessions endpoint
+app.post('/api/cleanup-old-sessions', authenticateToken, async (req, res) => {
+    try {
+        const { projectName } = req.body; // Get project name from request body
+        const result = await deleteOldSessions(projectName);
+        res.json({ 
+            success: true, 
+            ...result 
+        });
+    } catch (error) {
+        console.error('Cleanup error:', error);
         res.status(500).json({ error: error.message });
     }
 });

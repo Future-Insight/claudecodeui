@@ -28,7 +28,7 @@ import { ImageAttachment } from './ImageAttachment.jsx';
 import { formatUsageLimitText, safeLocalStorage, calculateDiff, flattenFileTree, convertSessionMessages } from '../utils/chatUtils.js';
 
 // Memoized message component to prevent unnecessary re-renders
-function ChatInterface({ selectedProject, selectedSession, sendMessage, messages, onFileOpen, onInputFocusChange, onSessionActive, onSessionInactive, onReplaceTemporarySession, onNavigateToSession, onShowSettings, autoExpandTools, showRawParameters, autoScrollToBottom, sendByCtrlEnter }) {
+function ChatInterface({ selectedProject, selectedSession, sendMessage, messages, onFileOpen, onInputFocusChange, onNavigateToSession, onShowSettings, autoExpandTools, showRawParameters, autoScrollToBottom, sendByCtrlEnter }) {
   const [input, setInput] = useState(() => {
     if (typeof window !== 'undefined' && selectedProject) {
       return safeLocalStorage.getItem(`draft_input_${selectedProject.name}`) || '';
@@ -88,17 +88,17 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
           'Authorization': `Bearer ${token}`
         }
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         const statesMap = new Map();
-        
+
         for (const [sessionId, state] of Object.entries(data.sessionStates)) {
           statesMap.set(sessionId, state);
         }
-        
+
         setSessionStates(statesMap);
-        
+
         // Check if current session is running
         if (currentSessionId && statesMap.has(currentSessionId)) {
           // If session is in the map, it's running
@@ -236,7 +236,7 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
   useEffect(() => {
     loadSessionStates();
   }, [loadSessionStates]);
-  
+
   useEffect(() => {
     // Load session messages when session changes
     const loadMessages = async () => {
@@ -338,12 +338,8 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
           if (latestMessage.sessionId && !currentSessionId) {
             sessionStorage.setItem('pendingSessionId', latestMessage.sessionId);
 
-            // Session Protection: Replace temporary "new-session-*" identifier with real session ID
-            // This maintains protection continuity - no gap between temp ID and real ID
-            // The temporary session is removed and real session is marked as active
-            if (onReplaceTemporarySession) {
-              onReplaceTemporarySession(latestMessage.sessionId);
-            }
+            // Store session ID for future reference
+            // No session protection needed - server manages session state
           }
           break;
 
@@ -365,7 +361,6 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
                     const updated = [...prev];
                     const last = updated[updated.length - 1];
                     if (last && last.type === 'assistant' && !last.isToolUse && last.isStreaming) {
-                      const oldLength = last.content?.length || 0;
                       last.content = (last.content || '') + chunk;
                     } else {
                       const newMessage = { type: 'assistant', content: chunk, timestamp: new Date(), isStreaming: true };
@@ -574,14 +569,7 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
           setCanAbortSession(false);
           setClaudeStatus(null);
 
-
-          // Session Protection: Mark session as inactive to re-enable automatic project updates
-          // Conversation is complete, safe to allow project updates again
-          // Use real session ID if available, otherwise use pending session ID
-          const activeSessionId = currentSessionId || sessionStorage.getItem('pendingSessionId');
-          if (activeSessionId && onSessionInactive) {
-            onSessionInactive(activeSessionId);
-          }
+          // Conversation completed - no session protection needed
 
           // If we have a pending session ID and the conversation completed successfully, use it
           const pendingSessionId = sessionStorage.getItem('pendingSessionId');
@@ -606,11 +594,7 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
           setCanAbortSession(false);
           setClaudeStatus(null);
 
-          // Session Protection: Mark session as inactive when aborted
-          // User or system aborted the conversation, re-enable project updates
-          if (currentSessionId && onSessionInactive) {
-            onSessionInactive(currentSessionId);
-          }
+          // Session aborted - no special handling needed
 
           setChatMessages(prev => [...prev, {
             type: 'assistant',
@@ -676,7 +660,7 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
               }
               return updated;
             });
-            
+
             // Update current session loading state based on its status
             if (statusUpdate.sessionId === currentSessionId) {
               if (statusUpdate.status === 'running') {
@@ -990,15 +974,7 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
     setIsUserScrolledUp(false); // Reset scroll state so auto-scroll works for Claude's response
     setTimeout(() => scrollToBottom(), 100); // Longer delay to ensure message is rendered
 
-    // Determine effective session id for replies to avoid race on state updates
-    const effectiveSessionId = currentSessionId || selectedSession?.id;
-
-    // Session Protection: Mark session as active to prevent automatic project updates during conversation
-    // Use existing session if available; otherwise a temporary placeholder until backend provides real ID
-    const sessionToActivate = effectiveSessionId || `new-session-${Date.now()}`;
-    if (onSessionActive) {
-      onSessionActive(sessionToActivate);
-    }
+    // No session protection needed - server manages the session lifecycle
 
     // Get tools settings from localStorage
     const getToolsSettings = () => {
@@ -1307,7 +1283,7 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
               })}
             </>
           )}
-          
+
 
           {isLoading && (
             <div className="chat-message assistant">
