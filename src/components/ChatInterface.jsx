@@ -36,8 +36,8 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
     return '';
   });
   const [chatMessages, setChatMessages] = useState(() => {
-    if (typeof window !== 'undefined' && selectedProject) {
-      const saved = safeLocalStorage.getItem(`chat_messages_${selectedProject.name}`);
+    if (typeof window !== 'undefined' && selectedSession) {
+      const saved = safeLocalStorage.getItem(`chat_messages_${selectedSession.id}`);
       return saved ? JSON.parse(saved) : [];
     }
     return [];
@@ -76,39 +76,8 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
   const [isTextareaExpanded, setIsTextareaExpanded] = useState(false);
   const [visibleMessageCount, setVisibleMessageCount] = useState(100);
   const [claudeStatus, setClaudeStatus] = useState(null);
-  const [sessionStates, setSessionStates] = useState(new Map()); // Track all session states
   const provider = localStorage.getItem('selected-provider') || 'claude';
 
-  // Load session states from server
-  const loadSessionStates = useCallback(async () => {
-    try {
-      const token = safeLocalStorage.getItem('auth-token');
-      const response = await fetch('/api/session-states', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const statesMap = new Map();
-
-        for (const [sessionId, state] of Object.entries(data.sessionStates)) {
-          statesMap.set(sessionId, state);
-        }
-
-        setSessionStates(statesMap);
-
-        // Check if current session is running
-        if (currentSessionId && statesMap.has(currentSessionId)) {
-          // If session is in the map, it's running
-          setIsLoading(true);
-        }
-      }
-    } catch (error) {
-      console.error('Error loading session states:', error);
-    }
-  }, [currentSessionId]);
 
   // Memoized diff calculation to prevent recalculating on every render
   const createDiff = useMemo(() => {
@@ -232,11 +201,6 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
     }
   }, [isNearBottom, hasMoreMessages, isLoadingMoreMessages, selectedSession, selectedProject, loadSessionMessages]);
 
-  // Load session states on component mount
-  useEffect(() => {
-    loadSessionStates();
-  }, [loadSessionStates]);
-
   useEffect(() => {
     // Load session messages when session changes
     const loadMessages = async () => {
@@ -310,7 +274,7 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
   // Persist chat messages to localStorage
   useEffect(() => {
     if (selectedProject && chatMessages.length > 0) {
-      safeLocalStorage.setItem(`chat_messages_${selectedProject.name}`, JSON.stringify(chatMessages));
+      safeLocalStorage.setItem(`chat_messages_${selectedSession.id}`, JSON.stringify(chatMessages));
     }
   }, [chatMessages, selectedProject]);
 
@@ -325,9 +289,8 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
     }
   }, [selectedProject?.name]);
 
-
+  // Handle WebSocket messages
   useEffect(() => {
-    // Handle WebSocket messages
     if (messages.length > 0) {
       const latestMessage = messages[messages.length - 1];
 
@@ -545,15 +508,7 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
             }
           }
           break;
-        case 'claude-interactive-prompt':
-          // Handle interactive prompts from CLI
-          setChatMessages(prev => [...prev, {
-            type: 'assistant',
-            content: latestMessage.data,
-            timestamp: new Date(),
-            isInteractivePrompt: true
-          }]);
-          break;
+
 
         case 'claude-error':
           setChatMessages(prev => [...prev, {
@@ -641,7 +596,7 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
           }
           break;
 
-        case 'session-status':
+
           // Handle session status updates
           const statusUpdate = latestMessage.data || latestMessage;
           if (statusUpdate.sessionId) {
