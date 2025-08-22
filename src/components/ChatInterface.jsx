@@ -294,6 +294,11 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
     if (messages.length > 0) {
       const latestMessage = messages[messages.length - 1];
 
+      //sessionId 必须等于当前
+      if (latestMessage.sessionId != currentSessionId) {
+        return
+      }
+
       switch (latestMessage.type) {
         case 'session-created':
           // New session created by Claude CLI - we receive the real session ID here
@@ -305,8 +310,9 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
             // No session protection needed - server manages session state
           }
           break;
-
+        //JSON格式输出
         case 'claude-response':
+          console.log("======client Received claude-response message:", latestMessage);
           const messageData = latestMessage.data.message || latestMessage.data;
 
           // Handle streaming format (content_block_delta / content_block_stop)
@@ -481,7 +487,7 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
             }
           }
           break;
-
+        //非json格式输出, 基本不会有
         case 'claude-output':
           {
             const cleaned = String(latestMessage.data || '');
@@ -558,7 +564,7 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
           }]);
           break;
 
-        case 'claude-status':
+
           // Handle Claude working status messages
           const statusData = latestMessage.data;
           if (statusData) {
