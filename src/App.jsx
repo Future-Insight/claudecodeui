@@ -260,12 +260,21 @@ function AppContent() {
 
   const handleSessionSelect = (session) => {
     setSelectedSession(session);
+
+    // If session is null, navigate to home page
+    if (!session) {
+      navigate('/');
+      if (isMobile) {
+        setSidebarOpen(false);
+      }
+      return;
+    }
+
     // Only switch to chat tab when user explicitly selects a session
     // This prevents tab switching during automatic updates and preserves shell tabs
     //if (!activeTab.startsWith('shell-') && activeTab !== 'git' && activeTab !== 'preview') {
     setActiveTab('chat');
     //}
-
 
     if (isMobile) {
       setSidebarOpen(false);

@@ -1192,7 +1192,7 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
           className="flex-1 overflow-y-auto overflow-x-hidden px-0 py-3 sm:p-4 space-y-3 sm:space-y-4 relative"
         >
           {/* Loading overlay for session switching */}
-          {isLoadingSessionMessages && chatMessages.length > 0 && (
+          {isLoadingSessionMessages && (
             <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[100]">
               <div className="flex items-center justify-center space-x-2 bg-white dark:bg-gray-800 px-4 py-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600">
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
