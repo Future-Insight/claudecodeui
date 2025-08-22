@@ -273,10 +273,10 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
 
   // Persist chat messages to localStorage
   useEffect(() => {
-    if (selectedProject && chatMessages.length > 0) {
+    if (selectedSession && chatMessages.length > 0) {
       safeLocalStorage.setItem(`chat_messages_${selectedSession.id}`, JSON.stringify(chatMessages));
     }
-  }, [chatMessages, selectedProject]);
+  }, [chatMessages, selectedSession]);
 
   // Load saved state when project changes (but don't interfere with session loading)
   useEffect(() => {
@@ -563,84 +563,6 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
             timestamp: new Date()
           }]);
           break;
-
-
-          // Handle Claude working status messages
-          const statusData = latestMessage.data;
-          if (statusData) {
-            // Parse the status message to extract relevant information
-            let statusInfo = {
-              text: 'Working...',
-              tokens: 0,
-              can_interrupt: true
-            };
-
-            // Check for different status message formats
-            if (statusData.message) {
-              statusInfo.text = statusData.message;
-            } else if (statusData.status) {
-              statusInfo.text = statusData.status;
-            } else if (typeof statusData === 'string') {
-              statusInfo.text = statusData;
-            }
-
-            // Extract token count
-            if (statusData.tokens) {
-              statusInfo.tokens = statusData.tokens;
-            } else if (statusData.token_count) {
-              statusInfo.tokens = statusData.token_count;
-            }
-
-            // Check if can interrupt
-            if (statusData.can_interrupt !== undefined) {
-              statusInfo.can_interrupt = statusData.can_interrupt;
-            }
-
-            setClaudeStatus(statusInfo);
-            setIsLoading(true);
-            setCanAbortSession(statusInfo.can_interrupt);
-          }
-          break;
-
-
-          // Handle session status updates
-          const statusUpdate = latestMessage.data || latestMessage;
-          if (statusUpdate.sessionId) {
-            setSessionStates(prev => {
-              const updated = new Map(prev);
-              if (statusUpdate.status === 'running') {
-                // Add or update running session
-                updated.set(statusUpdate.sessionId, {
-                  status: statusUpdate.status,
-                  projectPath: statusUpdate.projectPath,
-                  lastUpdate: Date.now()
-                });
-              } else if (statusUpdate.status === 'completed') {
-                // Remove completed session
-                updated.delete(statusUpdate.sessionId);
-              }
-              return updated;
-            });
-
-            // Update current session loading state based on its status
-            if (statusUpdate.sessionId === currentSessionId) {
-              if (statusUpdate.status === 'running') {
-                setIsLoading(true);
-              } else if (statusUpdate.status === 'completed') {
-                setIsLoading(false);
-                setCanAbortSession(false);
-                setClaudeStatus(null);
-                // Remove completed session from state
-                setSessionStates(prev => {
-                  const updated = new Map(prev);
-                  updated.delete(statusUpdate.sessionId);
-                  return updated;
-                });
-              }
-            }
-          }
-          break;
-
       }
     }
   }, [messages]);

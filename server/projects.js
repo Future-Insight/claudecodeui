@@ -303,8 +303,20 @@ async function getSessions(projectName, limit = 5, offset = 0) {
       new Date(b.lastActivity) - new Date(a.lastActivity)
     );
 
-    // Use jsonl file count as total (each file = one session)
-    const total = jsonlFiles.length;
+    // Filter out empty files (size = 0) for total count
+    // todo 应该还是要读取文件, 是否有sessionId,有些文件没有sessionId,就不是一个会话
+    const nonEmptyFiles = await Promise.all(
+      jsonlFiles.map(async (file) => {
+        try {
+          const filePath = path.join(projectDir, file);
+          const stats = await fs.stat(filePath);
+          return stats.size > 0 ? file : null;
+        } catch (error) {
+          return null;
+        }
+      })
+    );
+    const total = nonEmptyFiles.filter(file => file !== null).length;
     const paginatedSessions = sortedSessions.slice(offset, offset + limit);
     const hasMore = offset + limit < total;
 
@@ -628,7 +640,7 @@ async function addProjectManually(projectPath, displayName = null) {
 // Delete sessions older than 24 hours for specific project or all projects
 async function deleteOldSessions(targetProjectName = null) {
   const projectsDir = path.join(process.env.HOME, '.claude', 'projects');
-  
+
   try {
     // Check if projects directory exists
     try {
@@ -653,7 +665,7 @@ async function deleteOldSessions(targetProjectName = null) {
 
     for (const projectName of projects) {
       const projectDir = path.join(projectsDir, projectName);
-      
+
       // Check if project directory exists and is a directory
       try {
         const stat = await fs.stat(projectDir);
@@ -667,17 +679,17 @@ async function deleteOldSessions(targetProjectName = null) {
 
       // Check for JSONL files
       const files = await fs.readdir(projectDir);
-      
+
       for (const file of files) {
         if (file.endsWith('.jsonl')) {
           const jsonlFile = path.join(projectDir, file);
-          
+
           try {
             // Check file modification time and size
             const stats = await fs.stat(jsonlFile);
             const fileModTime = stats.mtime;
             const fileSize = stats.size;
-            
+
             // If file is older than 24 hours or empty, delete it entirely
             if (fileModTime < cutoffTime || fileSize === 0) {
               await fs.unlink(jsonlFile);
@@ -719,8 +731,8 @@ async function deleteOldSessions(targetProjectName = null) {
 
     const scope = targetProjectName ? `project: ${targetProjectName}` : `${cleanedProjects} projects`;
     console.log(`🗑️  Cleanup complete: ${totalDeletedSessions} files deleted from ${scope}`);
-    return { 
-      deletedSessions: totalDeletedSessions, 
+    return {
+      deletedSessions: totalDeletedSessions,
       cleanedProjects: cleanedProjects,
       cutoffTime: cutoffTime.toISOString()
     };
