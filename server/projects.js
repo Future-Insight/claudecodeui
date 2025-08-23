@@ -167,7 +167,7 @@ async function extractProjectDirectory(projectName) {
   }
 }
 
-async function getProjects() {
+async function getProjects(targetProjectName = null) {
   const claudeDir = path.join(process.env.HOME, '.claude', 'projects');
   const config = await loadProjectConfig();
   const projects = [];
@@ -179,6 +179,11 @@ async function getProjects() {
 
     for (const entry of entries) {
       if (entry.isDirectory()) {
+        // 如果指定了targetProjectName，只处理该项目
+        if (targetProjectName && entry.name !== targetProjectName) {
+          continue;
+        }
+
         existingProjects.add(entry.name);
         const projectPath = path.join(claudeDir, entry.name);
 
@@ -221,6 +226,11 @@ async function getProjects() {
 
   // Add manually configured projects that don't exist as folders yet
   for (const [projectName, projectConfig] of Object.entries(config)) {
+    // 如果指定了targetProjectName，只处理该项目
+    if (targetProjectName && projectName !== targetProjectName) {
+      continue;
+    }
+
     if (!existingProjects.has(projectName) && projectConfig.manuallyAdded) {
       // Use the original path if available, otherwise extract from potential sessions
       let actualProjectDir = projectConfig.originalPath;

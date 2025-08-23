@@ -94,18 +94,22 @@ async function setupProjectsWatcher() {
                     // Clear project directory cache when files change
                     clearProjectDirectoryCache();
 
-                    // Get updated projects list
-                    //filePath /home/test/.claude/projects/-home-test-codes-single-book/38045670-f26a-4c33-876e-6e06c2dab350.jsonl
-                    //todo 这里还可以优化,只更新文件目录project的内容
-                    const updatedProjects = await getProjects();
+                    // Extract project name from file path
+                    const relativePath = path.relative(claudeProjectsPath, filePath);
+                    const projectName = relativePath.split(path.sep)[0];
+
+                    // Get updated projects list - only update specific project
+                    const updatedProjects = await getProjects(projectName);
 
                     // Notify all connected clients about the project changes
                     const updateMessage = JSON.stringify({
-                        type: 'projects_updated',
-                        projects: updatedProjects,
+                        type: 'projects_updated_new',
+                        updatedProject: updatedProjects[0], // 只包含更新的项目
+                        allProjects: null, // 不包含所有项目，由前端处理
                         timestamp: new Date().toISOString(),
                         changeType: eventType,
-                        changedFile: path.relative(claudeProjectsPath, filePath)
+                        changedFile: relativePath,
+                        targetProjectName: projectName
                     });
 
                     connectedClients.forEach(client => {

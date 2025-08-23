@@ -133,25 +133,29 @@ function AppContent() {
     if (messages.length > 0) {
       const latestMessage = messages[messages.length - 1];
 
-      if (latestMessage.type === 'projects_updated') {
-        // Directly update projects from WebSocket - no session protection needed
-        const updatedProjects = latestMessage.projects;
-        setProjects(updatedProjects);
-        // Update selected project if it exists in the updated projects
-        if (selectedProject) {
-          const updatedSelectedProject = updatedProjects.find(p => p.name === selectedProject.name);
-          if (updatedSelectedProject) {
-            setSelectedProject(updatedSelectedProject);
+      if (latestMessage.type === 'projects_updated_new') {
+        // 优化的项目更新处理 - 只更新指定项目
+        const { updatedProject, targetProjectName } = latestMessage;
 
-            // Update selected session only if it was deleted - avoid unnecessary reloads
+        if (updatedProject) {
+          setProjects(prevProjects => {
+            const newProjects = prevProjects.map(p =>
+              p.name === targetProjectName ? updatedProject : p
+            );
+            return newProjects;
+          });
+
+          // 如果当前选中的项目是被更新的项目，更新selectedProject
+          if (selectedProject && selectedProject.name === targetProjectName) {
+            setSelectedProject(updatedProject);
+
+            // 检查当前选中的session是否还存在
             if (selectedSession) {
-              const updatedSelectedSession = updatedSelectedProject.sessions?.find(s => s.id === selectedSession.id);
+              const updatedSelectedSession = updatedProject.sessions?.find(s => s.id === selectedSession.id);
               if (!updatedSelectedSession) {
-                // Session was deleted
                 localStorage.removeItem(`chat_messages_${selectedSession.id}`);
                 setSelectedSession(null);
               }
-              // Don't update if session still exists with same ID - prevents reload
             }
           }
         }
