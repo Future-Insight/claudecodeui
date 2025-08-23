@@ -1,0 +1,20 @@
+{
+  "output": "CHANGELOG.md",
+  "template": "keepachangelog",
+  "remote": "origin",
+  "unreleased": true,
+  "commitLimit": false,
+  "backfillLimit": false,
+  "tagPrefix": "",
+  "sortCommits": "date",
+  "includeBranch": ["main", "master"],
+  "replaceText": {
+    "feat": "Added",
+    "fix": "Fixed", 
+    "refactor": "Changed",
+    "style": "Changed",
+    "docs": "Changed",
+    "test": "Changed",
+    "chore": "Changed"
+  }
+}
