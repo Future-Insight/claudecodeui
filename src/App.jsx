@@ -155,27 +155,10 @@ function AppContent() {
             }
           }
         }
-      } else if (latestMessage.type === 'session-status') {
-        // Handle session status updates
-        const statusUpdate = latestMessage.data || latestMessage;
-        if (statusUpdate.sessionId) {
-          setSessionStates(prev => {
-            const updated = new Map(prev);
-            if (statusUpdate.status === 'running') {
-              // Add or update running session
-              updated.set(statusUpdate.sessionId, {
-                status: 'running',
-                projectPath: statusUpdate.projectPath,
-                lastUpdate: Date.now()
-              });
-            } else if (statusUpdate.status === 'completed') {
-              // Remove completed session
-              updated.delete(statusUpdate.sessionId);
-            }
-            return updated;
-          });
-        }
+      } else if (latestMessage.type === "session-created") {
+        console.log("🆕 Session created:", latestMessage.sessionId);
       }
+      loadSessionStates();
     }
   }, [messages]); // Removed selectedProject and selectedSession from dependencies
 
@@ -541,6 +524,7 @@ function AppContent() {
         <MainContent
           selectedProject={selectedProject}
           selectedSession={selectedSession}
+          sessionActive={sessionStates.has(selectedSession?.id)}
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           ws={ws}

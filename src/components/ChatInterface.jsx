@@ -28,7 +28,7 @@ import { ImageAttachment } from './ImageAttachment.jsx';
 import { formatUsageLimitText, safeLocalStorage, calculateDiff, flattenFileTree, convertSessionMessages } from '../utils/chatUtils.js';
 
 // Memoized message component to prevent unnecessary re-renders
-function ChatInterface({ selectedProject, selectedSession, sendMessage, messages, onFileOpen, onInputFocusChange, onNavigateToSession, onShowSettings, autoExpandTools, showRawParameters, autoScrollToBottom, sendByCtrlEnter }) {
+function ChatInterface({ selectedProject, selectedSession, sessionActive, sendMessage, messages, onFileOpen, onInputFocusChange, onNavigateToSession, onShowSettings, autoExpandTools, showRawParameters, autoScrollToBottom, sendByCtrlEnter }) {
   const [input, setInput] = useState(() => {
     if (typeof window !== 'undefined' && selectedProject) {
       return safeLocalStorage.getItem(`draft_input_${selectedProject.name}`) || '';
@@ -42,7 +42,6 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
     }
     return [];
   });
-  const [isLoading, setIsLoading] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState(selectedSession?.id || null);
   const [isInputFocused, setIsInputFocused] = useState(false);
   const [sessionMessages, setSessionMessages] = useState([]);
@@ -75,7 +74,6 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
   const [selectedFileIndex, setSelectedFileIndex] = useState(-1);
   const [cursorPosition, setCursorPosition] = useState(0);
   const [atSymbolPosition, setAtSymbolPosition] = useState(-1);
-  const [canAbortSession, setCanAbortSession] = useState(false);
   const [isUserScrolledUp, setIsUserScrolledUp] = useState(false);
   const scrollPositionRef = useRef({ height: 0, top: 0 });
   const [isTextareaExpanded, setIsTextareaExpanded] = useState(false);
@@ -284,7 +282,7 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
       } else {
         // Only clear messages if this is NOT a system-initiated session change AND we're not loading
         // During system session changes or while loading, preserve the chat messages
-        if (!isSystemSessionChange && !isLoading) {
+        if (!isSystemSessionChange && !sessionActive) {
           setChatMessages([]);
           setSessionMessages([]);
         }
@@ -576,8 +574,6 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
 
 
         case 'claude-complete':
-          setIsLoading(false);
-          setCanAbortSession(false);
           // Clear streaming buffer if any remains
           if (streamTimerRef.current) {
             clearTimeout(streamTimerRef.current);
@@ -603,8 +599,6 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
           break;
 
         case 'session-aborted':
-          setIsLoading(false);
-          setCanAbortSession(false);
           // Clear streaming buffer if any remains
           if (streamTimerRef.current) {
             clearTimeout(streamTimerRef.current);
@@ -850,7 +844,7 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!input.trim() || isLoading || !selectedProject) return;
+    if (!input.trim() || sessionActive || !selectedProject) return;
 
 
     // Upload images first if any
@@ -902,8 +896,7 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
       const newMessages = [...prev, userMessage];
       return newMessages;
     });
-    setIsLoading(true);
-    setCanAbortSession(true);
+
     // Set a default status when starting
     setClaudeStatus({
       text: 'Processing',
@@ -1092,7 +1085,7 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
 
 
   const handleAbortSession = () => {
-    if (currentSessionId && canAbortSession) {
+    if (currentSessionId && sessionActive) {
       sendMessage({
         type: 'abort-session',
         sessionId: currentSessionId,
@@ -1230,7 +1223,7 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
           )}
 
 
-          {isLoading && (
+          {sessionActive && (
             <div className="chat-message assistant">
               <div className="w-full">
                 <div className="flex items-center space-x-3 mb-2">
@@ -1263,7 +1256,7 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
           <div className="flex-1">
             <ClaudeStatus
               status={claudeStatus}
-              isLoading={isLoading}
+              isLoading={sessionActive}
               onAbort={handleAbortSession}
               provider={provider}
             />
@@ -1403,7 +1396,7 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
                   setIsTextareaExpanded(isExpanded);
                 }}
                 placeholder="Ask Claude to help with your code... (@ to reference files)"
-                disabled={isLoading}
+                disabled={sessionActive}
                 rows={1}
                 className="chat-input-placeholder w-full pl-12 pr-28 sm:pr-40 py-3 sm:py-4 bg-transparent rounded-2xl focus:outline-none text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 disabled:opacity-50 resize-none min-h-[40px] sm:min-h-[56px] max-h-[40vh] sm:max-h-[300px] overflow-y-auto text-sm sm:text-base transition-all duration-200"
                 style={{ height: 'auto' }}
@@ -1465,7 +1458,7 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
               {/* Send button */}
               <button
                 type="submit"
-                disabled={!input.trim() || isLoading}
+                disabled={!input.trim() || sessionActive}
                 onMouseDown={(e) => {
                   e.preventDefault();
                   handleSubmit(e);
