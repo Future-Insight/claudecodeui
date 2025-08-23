@@ -1,8 +1,29 @@
 <div align="center">
   <img src="public/logo.svg" alt="Claude Code UI" width="64" height="64">
-  <h1>Claude Code UI</h1>
+  <h1>Claude Code UI - 中文版</h1>
 </div>
 
+## 🚀 版本 100.1.0 - 中文化增强版
+
+这是 Claude Code UI 的中文优化版本，基于原项目进行了大幅改进和本地化。
+
+### ✨ 主要改进 (相对于原版本)
+
+- **🌏 完整中文界面**: 所有界面元素、提示信息、错误消息均已本地化
+- **📝 中文变更日志**: 完整的中文更新记录和版本管理系统  
+- **🔧 自动化工具**: 集成变更日志自动生成和版本管理脚本
+- **💬 中文交互**: 优化了用户交互体验，更符合中文用户习惯
+- **🎯 增强功能**: 改进会话管理、消息显示和界面布局
+- **📱 移动优化**: 针对中文内容优化了移动端显示效果
+
+### 🎨 界面本地化特性
+
+- GitPanel 和 SetupForm 组件完全中文化
+- 会话管理界面中文提示和状态显示
+- 错误处理和通知消息本地化
+- 中文友好的布局和排版优化
+
+---
 
 A desktop and mobile UI for [Claude Code](https://docs.anthropic.com/en/docs/claude-code), and [Cursor CLI](https://docs.cursor.com/en/cli/overview). You can use it locally or remotely to view your active projects and sessions in Claude Code or Cursor and make changes to them from everywhere (mobile or desktop). This gives you a proper interface that works everywhere. Supports models including **Claude Sonnet 4**, **Opus 4.1**, and **GPT-5**
 
@@ -203,9 +224,39 @@ We welcome contributions! Please follow these guidelines:
 - **UI/UX improvements** - Better user experience
 - **Performance optimizations** - Make it faster
 
-## Troubleshooting
+## 更新日志
 
-### Common Issues & Solutions
+项目所有重要更改记录在 [CHANGELOG.md](CHANGELOG.md) 文件中。
+
+### 自动生成变更日志
+
+我们使用自动化工具来维护更新日志：
+
+```bash
+# 生成/更新变更日志
+npm run changelog
+
+# 使用约定式提交格式生成
+npm run changelog:conventional
+```
+
+### 推荐的提交格式
+
+为了更好地自动生成变更日志，请使用以下提交格式：
+
+```bash
+feat: 添加新功能      # 新增功能
+fix: 修复bug         # 错误修复  
+refactor: 重构代码   # 代码重构
+style: 样式调整      # 样式修改
+docs: 文档更新       # 文档变更
+test: 测试相关       # 测试代码
+chore: 其他维护      # 构建过程或辅助工具的变动
+```
+
+## 故障排除
+
+### 常见问题及解决方案
 
 #### "No Claude projects found"
 **Problem**: The UI shows no projects or empty project list
