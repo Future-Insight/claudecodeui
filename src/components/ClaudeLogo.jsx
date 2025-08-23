@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getCurrentProvider } from '../utils/apiConfig';
+import { getCurrentProvider, clearConfigCache } from '../utils/apiConfig';
 
 const ClaudeLogo = ({className = 'w-5 h-5'}) => {
   const [provider, setProvider] = useState({
@@ -23,6 +23,8 @@ const ClaudeLogo = ({className = 'w-5 h-5'}) => {
 
     // 监听配置变化事件
     const handleConfigChange = () => {
+      // 清除缓存并重新加载配置
+      clearConfigCache();
       loadProvider();
     };
     window.addEventListener('apiConfigChanged', handleConfigChange);

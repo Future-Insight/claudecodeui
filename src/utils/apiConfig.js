@@ -3,6 +3,12 @@
  * 从环境变量和配置文件中读取API类型和相关配置
  */
 
+// 缓存相关变量
+let configCache = null;
+let cacheTimestamp = null;
+const CACHE_DURATION = 30000; // 30秒缓存时间
+let currentRequest = null; // 防止并发请求
+
 // 支持的API提供商配置
 export const API_PROVIDERS = {
   claude: {
@@ -110,9 +116,50 @@ function inferProviderFromBaseUrl(baseUrl) {
 }
 
 /**
+ * 清除配置缓存
+ */
+export function clearConfigCache() {
+  configCache = null;
+  cacheTimestamp = null;
+  currentRequest = null;
+}
+
+/**
+ * 检查缓存是否有效
+ */
+function isCacheValid() {
+  return configCache && cacheTimestamp && (Date.now() - cacheTimestamp < CACHE_DURATION);
+}
+
+/**
  * 获取API配置
  */
 export async function getApiConfig() {
+  // 检查缓存是否有效
+  if (isCacheValid()) {
+    return configCache;
+  }
+
+  // 如果正在请求中，等待当前请求完成
+  if (currentRequest) {
+    return currentRequest;
+  }
+
+  // 创建新请求
+  currentRequest = fetchApiConfig();
+  
+  try {
+    const result = await currentRequest;
+    return result;
+  } finally {
+    currentRequest = null;
+  }
+}
+
+/**
+ * 实际的配置获取函数
+ */
+async function fetchApiConfig() {
   try {
     // 从后端获取Claude配置（包括环境变量、settings.json、claude-webui.json）
     const token = localStorage.getItem('auth-token');
@@ -145,7 +192,7 @@ export async function getApiConfig() {
       inferredProvider = baseUrlProvider || modelProvider || 'claude';
     }
 
-    return {
+    const result = {
       provider: inferredProvider,
       model: config.model || '',
       smallModel: config.smallModel || '',
@@ -156,14 +203,26 @@ export async function getApiConfig() {
       providerInfo: API_PROVIDERS[inferredProvider] || API_PROVIDERS.claude
     };
 
+    // 缓存结果
+    configCache = result;
+    cacheTimestamp = Date.now();
+
+    return result;
+
   } catch (error) {
     console.error('Error getting API config:', error);
 
     // 发生错误时返回默认配置
-    return {
+    const defaultResult = {
       ...DEFAULT_CONFIG,
       providerInfo: API_PROVIDERS.claude
     };
+
+    // 缓存默认配置（较短的缓存时间）
+    configCache = defaultResult;
+    cacheTimestamp = Date.now();
+
+    return defaultResult;
   }
 }
 
@@ -196,6 +255,10 @@ export async function saveApiConfig(config) {
     if (response.ok) {
       const result = await response.json();
       console.log('Configuration saved to backend:', result.message);
+      
+      // 清除缓存，强制下次重新获取配置
+      clearConfigCache();
+      
       return true;
     } else {
       console.error('Failed to save configuration to backend');

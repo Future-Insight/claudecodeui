@@ -14,6 +14,8 @@ function ProjectPreview({ selectedProject, isMobile }) {
   const [showLogs, setShowLogs] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
   const [globalConfig, setGlobalConfig] = useState({ host: 'localhost', openInNewTab: true });
+  const [error, setError] = useState('');
+  const [showErrorModal, setShowErrorModal] = useState(false);
   const statusCheckIntervalRef = useRef(null);
 
   useEffect(() => {
@@ -100,6 +102,7 @@ function ProjectPreview({ selectedProject, isMobile }) {
     if (!selectedProject || !config) return;
     
     setIsStarting(true);
+    setError('');
     try {
       const response = await authenticatedFetch(`/api/project/${encodeURIComponent(selectedProject.name)}/preview/start`, {
         method: 'POST'
@@ -114,10 +117,14 @@ function ProjectPreview({ selectedProject, isMobile }) {
         }, 2000);
       } else {
         console.error('Failed to start server:', data.error);
+        setError(data.error || '启动开发服务器失败');
+        setShowErrorModal(true);
         setServerStatus('error');
       }
     } catch (error) {
       console.error('Error starting server:', error);
+      setError('启动开发服务器时发生错误');
+      setShowErrorModal(true);
       setServerStatus('error');
     } finally {
       setIsStarting(false);
@@ -343,15 +350,12 @@ function ProjectPreview({ selectedProject, isMobile }) {
     );
   }
 
-  if (!config) {
-    return renderConfigPrompt();
-  }
-
+  
   return (
     <div className="h-full flex flex-col bg-white dark:bg-gray-900">
-      {renderPreviewContent()}
+      {!config ? renderConfigPrompt() : renderPreviewContent()}
       
-      {/* 配置模态框 */}
+      {/* 配置模态框 - 始终渲染 */}
       <PreviewConfig
         selectedProject={selectedProject}
         isOpen={showConfig}
@@ -371,6 +375,86 @@ function ProjectPreview({ selectedProject, isMobile }) {
         onClose={() => setShowLogs(false)}
         isMobile={isMobile}
       />
+      
+      {/* 错误提示模态框 */}
+      {showErrorModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-xl ${
+            isMobile 
+              ? 'mx-4 max-w-sm w-full' 
+              : 'max-w-md w-full mx-6'
+          }`}>
+            
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                启动失败
+              </h3>
+              <button
+                onClick={() => setShowErrorModal(false)}
+                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <AlertCircle className="w-6 h-6 text-red-500" />
+                <div>
+                  <p className="font-medium text-gray-900 dark:text-white">
+                    开发服务器启动失败
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                    {error}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-4 border border-red-200 dark:border-red-800">
+                <h4 className="font-medium text-red-900 dark:text-red-100 mb-2">
+                  可能的解决方案：
+                </h4>
+                <ul className="text-sm text-red-700 dark:text-red-200 space-y-1">
+                  <li>• 检查项目目录是否存在依赖文件</li>
+                  <li>• 确认端口是否被其他程序占用</li>
+                  <li>• 验证启动命令是否正确</li>
+                  <li>• 查看日志了解详细错误信息</li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => {
+                  setShowErrorModal(false);
+                  setShowLogs(true);
+                }}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white"
+              >
+                查看日志
+              </button>
+              <button
+                onClick={() => {
+                  setShowErrorModal(false);
+                  setShowConfig(true);
+                }}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white"
+              >
+                检查配置
+              </button>
+              <button
+                onClick={() => setShowErrorModal(false)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                确定
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

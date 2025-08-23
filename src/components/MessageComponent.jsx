@@ -155,7 +155,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                   } : undefined}
                   title={import.meta.env.DEV ? '点击复制消息JSON' : ''}
                 >
-                  {message.type === 'error' ? 'Error' : message.type === 'tool' ? 'Tool' : '●'}
+                  {message.type === 'error' ? '错误' : message.type === 'tool' ? '工具' : '●'}
                 </span>
                 <span className="text-xs text-gray-500 dark:text-gray-400">
                   {new Date(message.timestamp).toLocaleTimeString()}
@@ -222,7 +222,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                             {showRawParameters && (
                               <details className="mt-2" open={autoExpandTools}>
                                 <summary className="text-xs text-blue-600 dark:text-blue-400 cursor-pointer hover:text-gray-600 dark:hover:text-gray-300">
-                                  View raw parameters
+                                  查看原始参数
                                 </summary>
                                 <pre className="mt-2 text-xs bg-gray-100 dark:bg-gray-800/30 p-2 rounded whitespace-pre-wrap break-words overflow-hidden text-gray-700 dark:text-gray-300">
                                   {message.toolInput}
@@ -323,7 +323,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                               {showRawParameters && (
                                 <details className="mt-2" open={autoExpandTools}>
                                   <summary className="text-xs text-blue-600 dark:text-blue-400 cursor-pointer hover:text-gray-600 dark:hover:text-gray-300">
-                                    View raw parameters
+                                    查看原始参数
                                   </summary>
                                   <pre className="mt-2 text-xs bg-gray-100 dark:bg-gray-800/30 p-2 rounded whitespace-pre-wrap break-words overflow-hidden text-gray-700 dark:text-gray-300">
                                     {message.toolInput}
@@ -357,7 +357,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                               {showRawParameters && (
                                 <details className="mt-3" open={autoExpandTools}>
                                   <summary className="text-xs text-blue-600 dark:text-blue-400 cursor-pointer hover:text-gray-600 dark:hover:text-gray-300">
-                                    View raw parameters
+                                    查看原始参数
                                   </summary>
                                   <pre className="mt-2 text-xs bg-gray-100 dark:bg-gray-800/30 p-2 rounded overflow-x-auto text-gray-700 dark:text-gray-300">
                                     {message.toolInput}
@@ -407,7 +407,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                             {showRawParameters && (
                               <details className="mt-2">
                                 <summary className="text-xs text-blue-600 dark:text-blue-400 cursor-pointer hover:text-gray-600 dark:hover:text-gray-300">
-                                  View raw parameters
+                                  查看原始参数
                                 </summary>
                                 <pre className="mt-2 text-xs bg-gray-100 dark:bg-gray-800/30 p-2 rounded whitespace-pre-wrap break-words overflow-hidden text-gray-700 dark:text-gray-300">
                                   {message.toolInput}
@@ -504,7 +504,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                               {showRawParameters && (
                                 <details className="mt-2" open={autoExpandTools}>
                                   <summary className="text-xs text-blue-600 dark:text-blue-400 cursor-pointer hover:text-gray-600 dark:hover:text-gray-300">
-                                    View raw parameters
+                                    查看原始参数
                                   </summary>
                                   <pre className="mt-2 text-xs bg-gray-100 dark:bg-gray-800/30 p-2 rounded whitespace-pre-wrap break-words overflow-hidden text-gray-700 dark:text-gray-300">
                                     {message.toolInput}

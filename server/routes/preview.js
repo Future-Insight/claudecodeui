@@ -41,21 +41,21 @@ async function detectProjectType(projectPath) {
     
     // 根据依赖检测框架类型
     if (dependencies['next']) {
-      return { port: 3000, command: scripts.dev || 'npm run dev', type: 'Next.js' };
+      return { port: 3000, command: scripts.dev || 'npm run dev', type: 'Next.js', directory: '' };
     } else if (dependencies['react-scripts']) {
-      return { port: 3000, command: scripts.start || 'npm start', type: 'Create React App' };
+      return { port: 3000, command: scripts.start || 'npm start', type: 'Create React App', directory: '' };
     } else if (dependencies['vue'] && dependencies['@vue/cli-service']) {
-      return { port: 8080, command: scripts.serve || 'npm run serve', type: 'Vue CLI' };
+      return { port: 8080, command: scripts.serve || 'npm run serve', type: 'Vue CLI', directory: '' };
     } else if (dependencies['vite']) {
-      return { port: 5173, command: scripts.dev || 'npm run dev', type: 'Vite' };
+      return { port: 5173, command: scripts.dev || 'npm run dev', type: 'Vite', directory: '' };
     } else if (dependencies['@angular/cli']) {
-      return { port: 4200, command: scripts.start || 'npm start', type: 'Angular' };
+      return { port: 4200, command: scripts.start || 'npm start', type: 'Angular', directory: '' };
     } else if (dependencies['nuxt']) {
-      return { port: 3000, command: scripts.dev || 'npm run dev', type: 'Nuxt.js' };
+      return { port: 3000, command: scripts.dev || 'npm run dev', type: 'Nuxt.js', directory: '' };
     } else if (scripts.dev) {
-      return { port: 3000, command: scripts.dev, type: 'Custom' };
+      return { port: 3000, command: scripts.dev, type: 'Custom', directory: '' };
     } else if (scripts.start) {
-      return { port: 3000, command: scripts.start, type: 'Custom' };
+      return { port: 3000, command: scripts.start, type: 'Custom', directory: '' };
     }
     
     return null;
@@ -181,17 +181,33 @@ router.post('/project/:name/preview/start', authenticateToken, async (req, res) 
       return res.status(400).json({ error: 'No development server configuration found' });
     }
     
-    const { port, command } = config.dev;
+    const { port, command, directory = '' } = config.dev;
     const [cmd, ...args] = command.split(' ');
+    
+    // 确定工作目录
+    const workingDirectory = directory 
+      ? path.join(projectPath, directory.replace(/^\/+/, '')) 
+      : projectPath;
     
     console.log(`🚀 Starting development server for project: ${projectName}`);
     console.log(`   Command: ${command}`);
     console.log(`   Port: ${port}`);
-    console.log(`   Directory: ${projectPath}`);
+    console.log(`   Project Directory: ${projectPath}`);
+    console.log(`   Working Directory: ${workingDirectory}`);
+    
+    // 检查工作目录是否存在
+    try {
+      await fs.access(workingDirectory);
+    } catch (error) {
+      return res.status(400).json({ 
+        error: `Working directory does not exist: ${directory}`,
+        details: `Path: ${workingDirectory}` 
+      });
+    }
     
     // 启动开发服务器
     const serverProcess = spawn(cmd, args, {
-      cwd: projectPath,
+      cwd: workingDirectory,
       stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env, PORT: port.toString() }
     });

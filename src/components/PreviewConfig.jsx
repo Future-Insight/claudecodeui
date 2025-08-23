@@ -1,22 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Loader, Check, AlertTriangle, Play, Globe, Settings } from 'lucide-react';
+import { X, Save, Loader, Check, AlertTriangle, Globe, Settings } from 'lucide-react';
 import { authenticatedFetch } from '../utils/api';
 
 const FRAMEWORK_PRESETS = [
-  { name: 'React (CRA)', port: 3000, command: 'npm start', icon: '⚛️' },
-  { name: 'React (Vite)', port: 5173, command: 'npm run dev', icon: '⚡' },
-  { name: 'Next.js', port: 3000, command: 'npm run dev', icon: '▲' },
-  { name: 'Vue.js', port: 8080, command: 'npm run serve', icon: '🟢' },
-  { name: 'Angular', port: 4200, command: 'npm start', icon: '🔺' },
-  { name: 'Nuxt.js', port: 3000, command: 'npm run dev', icon: '💚' },
-  { name: 'Svelte', port: 5173, command: 'npm run dev', icon: '🧡' },
-  { name: 'Gatsby', port: 8000, command: 'npm run develop', icon: '🟣' },
+  { name: 'React', port: 3000, command: 'npm start', directory: '' },
+  { name: 'Vite', port: 5173, command: 'npm run dev', directory: '' },
+  { name: 'Next.js', port: 3000, command: 'npm run dev', directory: '' },
+  { name: 'Vue', port: 8080, command: 'npm run serve', directory: '' },
+  { name: 'Angular', port: 4200, command: 'npm start', directory: '' },
+  { name: 'Nuxt', port: 3000, command: 'npm run dev', directory: '' },
 ];
 
 function PreviewConfig({ selectedProject, isOpen, onClose, onSave, isMobile }) {
-  const [config, setConfig] = useState({ dev: { port: 3000, command: 'npm run dev' } });
+  const [config, setConfig] = useState({ dev: { port: 3000, command: 'npm run dev', directory: '' } });
   const [globalConfig, setGlobalConfig] = useState({ host: 'localhost', openInNewTab: true });
-  const [activeTab, setActiveTab] = useState('project'); // 'project' or 'global'
+  const [activeTab, setActiveTab] = useState('project');
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
@@ -132,7 +130,8 @@ function PreviewConfig({ selectedProject, isOpen, onClose, onSave, isMobile }) {
     setConfig({
       dev: {
         port: preset.port,
-        command: preset.command
+        command: preset.command,
+        directory: preset.directory || ''
       }
     });
     setError('');
@@ -234,27 +233,24 @@ function PreviewConfig({ selectedProject, isOpen, onClose, onSave, isMobile }) {
               {/* 框架预设 */}
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                  快速设置 (选择框架)
+                  快速设置
                 </label>
-                <div className={`grid ${isMobile ? 'grid-cols-2' : 'grid-cols-4'} gap-2`}>
+                <div className={`grid ${isMobile ? 'grid-cols-2' : 'grid-cols-3'} gap-2`}>
                   {FRAMEWORK_PRESETS.map((preset) => (
                     <button
                       key={preset.name}
                       onClick={() => handlePresetSelect(preset)}
-                      className={`p-3 text-left border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${
-                        config.dev?.port === preset.port && config.dev?.command === preset.command
+                      className={`p-3 text-center border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${
+                        config.dev?.port === preset.port && 
+                        config.dev?.command === preset.command &&
+                        (config.dev?.directory || '') === (preset.directory || '')
                           ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                           : 'border-gray-200 dark:border-gray-600'
                       }`}
                     >
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-lg">{preset.icon}</span>
-                        <span className={`font-medium text-xs ${isMobile ? 'text-xs' : 'text-sm'}`}>
-                          {preset.name.split(' ')[0]}
-                        </span>
-                      </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
-                        :{preset.port}
+                      <div className="font-medium text-sm">{preset.name}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        {preset.command} (:{preset.port})
                       </div>
                     </button>
                   ))}
@@ -296,6 +292,22 @@ function PreviewConfig({ selectedProject, isOpen, onClose, onSave, isMobile }) {
                     启动开发服务器的命令
                   </p>
                 </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    工作目录
+                  </label>
+                  <input
+                    type="text"
+                    value={config.dev?.directory || ''}
+                    onChange={(e) => handleInputChange('directory', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="留空使用项目根目录"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    开发服务器运行的子目录（相对于项目根目录），留空则在项目根目录运行
+                  </p>
+                </div>
               </div>
 
               {/* 错误提示 */}
@@ -315,6 +327,7 @@ function PreviewConfig({ selectedProject, isOpen, onClose, onSave, isMobile }) {
                   <div className="text-sm text-gray-600 dark:text-gray-300 space-y-1">
                     <div>端口: <span className="font-mono">{config.dev.port}</span></div>
                     <div>命令: <span className="font-mono">{config.dev.command}</span></div>
+                    <div>工作目录: <span className="font-mono">{config.dev.directory || '项目根目录'}</span></div>
                     <div>访问: <span className="font-mono">http://localhost:{config.dev.port}</span></div>
                   </div>
                 </div>

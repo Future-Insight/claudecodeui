@@ -17,7 +17,7 @@ const formatTimeAgo = (dateString, currentTime) => {
 
   // Check if date is valid
   if (isNaN(date.getTime())) {
-    return 'Unknown';
+    return '未知时间';
   }
 
   const diffInMs = now - date;
@@ -26,13 +26,13 @@ const formatTimeAgo = (dateString, currentTime) => {
   const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60));
   const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
 
-  if (diffInSeconds < 60) return 'Just now';
-  if (diffInMinutes === 1) return '1 min ago';
-  if (diffInMinutes < 60) return `${diffInMinutes} mins ago`;
-  if (diffInHours === 1) return '1 hour ago';
-  if (diffInHours < 24) return `${diffInHours} hours ago`;
-  if (diffInDays === 1) return '1 day ago';
-  if (diffInDays < 7) return `${diffInDays} days ago`;
+  if (diffInSeconds < 60) return '刚刚';
+  if (diffInMinutes === 1) return '1分钟前';
+  if (diffInMinutes < 60) return `${diffInMinutes}分钟前`;
+  if (diffInHours === 1) return '1小时前';
+  if (diffInHours < 24) return `${diffInHours}小时前`;
+  if (diffInDays === 1) return '1天前';
+  if (diffInDays < 7) return `${diffInDays}天前`;
   return date.toLocaleDateString();
 };
 
@@ -594,7 +594,7 @@ function Sidebar({
           <div className="hidden md:block space-y-2">
             <div className="flex items-center gap-2 text-sm font-medium text-foreground">
               <FolderPlus className="w-4 h-4" />
-              Create New Project
+              创建新项目
             </div>
             <Input
               value={newProjectPath}
@@ -623,7 +623,7 @@ function Sidebar({
                 disabled={creatingProject}
                 className="h-8 text-xs hover:bg-accent transition-colors"
               >
-                Cancel
+                取消
               </Button>
             </div>
           </div>
@@ -637,7 +637,7 @@ function Sidebar({
                     <FolderPlus className="w-3 h-3 text-primary" />
                   </div>
                   <div>
-                    <h2 className="text-base font-semibold text-foreground">New Project</h2>
+                    <h2 className="text-base font-semibold text-foreground">新建项目</h2>
                   </div>
                 </div>
                 <button
@@ -669,7 +669,7 @@ function Sidebar({
                     variant="outline"
                     className="flex-1 h-9 text-sm rounded-md active:scale-95 transition-transform"
                   >
-                    Cancel
+                    取消
                   </Button>
                   <Button
                     onClick={createNewProject}
@@ -695,7 +695,7 @@ function Sidebar({
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
               type="text"
-              placeholder="Search projects..."
+              placeholder="搜索项目..."
               value={searchFilter}
               onChange={(e) => setSearchFilter(e.target.value)}
               className="pl-9 h-9 text-sm bg-muted/50 border-0 focus:bg-background focus:ring-1 focus:ring-primary/20"
@@ -1010,7 +1010,7 @@ function Sidebar({
                                 e.stopPropagation();
                                 startEditing(project);
                               }}
-                              title="Rename project (F2)"
+                              title="重命名项目 (F2)"
                             >
                               <Edit3 className="w-3 h-3" />
                             </div>
@@ -1021,7 +1021,7 @@ function Sidebar({
                                   e.stopPropagation();
                                   deleteProject(project.name);
                                 }}
-                                title="Delete empty project (Delete)"
+                                title="删除空项目 (Delete)"
                               >
                                 <Trash2 className="w-3 h-3 text-red-600 dark:text-red-400" />
                               </div>
@@ -1209,7 +1209,7 @@ function Sidebar({
                                             setEditingSession(null);
                                             setEditingSessionName('');
                                           }}
-                                          title="Cancel"
+                                          title="取消"
                                         >
                                           <X className="w-3 h-3 text-gray-600 dark:text-gray-400" />
                                         </button>
@@ -1251,7 +1251,7 @@ function Sidebar({
                                             e.stopPropagation();
                                             deleteSession(project.name, session.id);
                                           }}
-                                          title="Delete this session permanently"
+                                          title="永久删除此会话"
                                         >
                                           <Trash2 className="w-3 h-3 text-red-600 dark:text-red-400" />
                                         </button>
@@ -1396,7 +1396,7 @@ function Sidebar({
             <div className="w-10 h-10 rounded-2xl bg-background/80 flex items-center justify-center">
               <Settings className="w-5 h-5 text-muted-foreground" />
             </div>
-            <span className="text-lg font-medium text-foreground">Settings</span>
+            <span className="text-lg font-medium text-foreground">设置</span>
           </button>
         </div>
 
@@ -1407,7 +1407,7 @@ function Sidebar({
           onClick={onShowSettings}
         >
           <Settings className="w-3 h-3" />
-          <span className="text-xs">Tools Settings</span>
+          <span className="text-xs">工具设置</span>
         </Button>
       </div>
     </div>
