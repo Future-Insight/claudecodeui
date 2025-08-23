@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, memo } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import TodoList from './TodoList';
 import { formatUsageLimitText } from '../utils/chatUtils';
 
@@ -11,6 +12,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
   const messageRef = useRef(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isUserExpanded, setIsUserExpanded] = useState(false);
+  const [isGrepExpanded, setIsGrepExpanded] = useState(false);
   useEffect(() => {
     if (!autoExpandTools || !messageRef.current || !message.isToolUse) return;
 
@@ -571,6 +573,44 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                     }
                   }
 
+                  // Special handling for Task tool
+                  if (message.toolName === 'Task') {
+                    try {
+                      const input = JSON.parse(message.toolInput);
+                      if (input.description && input.prompt) {
+                        return (
+                          <details className="mt-2" open={autoExpandTools}>
+                            <summary className="text-sm text-gray-600 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300 flex items-center gap-2">
+                              <svg className="w-4 h-4 transition-transform details-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                              🤖 Task - {input.description}
+                            </summary>
+                            <div className="mt-3">
+                              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                                <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                                  {input.prompt.replace(/\\n/g, '\n')}
+                                </div>
+                              </div>
+                              {showRawParameters && (
+                                <details className="mt-2" open={autoExpandTools}>
+                                  <summary className="text-xs text-blue-600 dark:text-blue-400 cursor-pointer hover:text-gray-600 dark:hover:text-gray-300">
+                                    查看原始参数
+                                  </summary>
+                                  <pre className="mt-2 text-xs bg-gray-100 dark:bg-gray-800/30 p-2 rounded whitespace-pre-wrap break-words overflow-hidden text-gray-700 dark:text-gray-300">
+                                    {message.toolInput}
+                                  </pre>
+                                </details>
+                              )}
+                            </div>
+                          </details>
+                        );
+                      }
+                    } catch (e) {
+                      // Fall back to regular display
+                    }
+                  }
+
                   // Regular tool input display for other tools
                   let toolNameExpanded = message.toolName;
                   if (message.toolInput) {
@@ -630,11 +670,34 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                           }
                         }
 
-                        // Special handling for Grep tool results - just handle newlines
+                        // Special handling for Grep tool results - limit to 3 lines with expand option
                         if (message.toolName === 'Grep') {
+                          const lines = content.replace(/\\n/g, '\n').split('\n').filter(line => line.trim() !== '');
+                          const shouldLimit = lines.length > 3;
+
                           return (
-                            <div className="text-sm text-gray-700 dark:text-gray-300 font-mono whitespace-pre-wrap">
-                              {content.replace(/\\n/g, '\n')}
+                            <div className="text-sm text-gray-700 dark:text-gray-300 font-mono">
+                              <div className="whitespace-pre-wrap">
+                                {shouldLimit && !isGrepExpanded
+                                  ? lines.slice(0, 2).join('\n')
+                                  : lines.join('\n')
+                                }
+                              </div>
+                              {shouldLimit && (
+                                <div className="mt-2">
+                                  {!isGrepExpanded && (
+                                    <div className="text-gray-400 dark:text-gray-500 text-xs my-1 italic">
+                                      ... 还有 {lines.length - 3} 行结果 ...
+                                    </div>
+                                  )}
+                                  <button
+                                    onClick={() => setIsGrepExpanded(!isGrepExpanded)}
+                                    className="text-blue-600 dark:text-blue-400 hover:text-gray-600 dark:hover:text-gray-300 text-xs underline"
+                                  >
+                                    {isGrepExpanded ? '收起' : '展开全部'}
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           );
                         }
@@ -1050,6 +1113,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                 {message.type === 'assistant' ? (
                   <div className="prose prose-xs max-w-none dark:prose-invert prose-gray [&_code]:!bg-transparent [&_code]:!p-0 [&_h1]:text-lg [&_h2]:text-base [&_h3]:text-base [&_h4]:text-sm [&_h5]:text-sm [&_h6]:text-sm [&_h1]:font-bold [&_h2]:font-semibold [&_h3]:font-semibold [&_h4]:font-medium [&_h5]:font-medium [&_h6]:font-medium">
                     <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
                       components={{
                         code: ({ node, inline, className, children, ...props }) => {
                           // Check if it's inline code (no className or not a code block)
@@ -1087,6 +1151,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                           <div className="mb-2 last:mb-0">
                             {children}
                           </div>
+
                         )
                       }}
                     >

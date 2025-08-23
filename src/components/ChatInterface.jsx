@@ -205,12 +205,58 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
       }
     }
   }, [isNearBottom, hasMoreMessages, isLoadingMoreMessages, selectedSession, selectedProject, loadSessionMessages]);
+  // 加载最新的消息（最后10条）
+  const loadLatestMessages = useCallback(async () => {
+    if (!selectedSession) return;
+
+    try {
+      // 获取最新10条消息
+      const response = await api.sessionMessages(
+        selectedProject.name,
+        selectedSession.id,
+        10,  // limit: 10条
+        0    // offset: 0 获取最新的
+      );
+
+      const data = await response.json();
+      const newMessages = data.messages || [];
+
+      // 去重：基于消息的 timestamp 或唯一标识
+      setSessionMessages(prevMessages => {
+        const existingTimestamps = new Set(
+          prevMessages.map(m => m.timestamp)
+        );
+
+        // 过滤出真正的新消息
+        const uniqueNewMessages = newMessages.filter(
+          msg => !existingTimestamps.has(msg.timestamp)
+        );
+
+        // 合并并排序
+        return [...prevMessages, ...uniqueNewMessages].sort(
+          (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
+        );
+      });
+
+      // 如果在底部，自动滚动到最新消息
+      if (!isUserScrolledUp) {
+        setTimeout(scrollToBottom, 100);
+      }
+    } catch (error) {
+      console.error('Error loading latest messages:', error);
+    }
+  }, [selectedSession, isUserScrolledUp]);
 
   useEffect(() => {
     // Load session messages when session changes
     const loadMessages = async () => {
-      if (selectedSession && selectedProject) {
-
+      //同一个sessionId
+      if (selectedSession && selectedProject && currentSessionId === selectedSession.id && totalMessages > 0) {
+        console.log("Same sessionId, loading latest messages");
+        loadLatestMessages();
+      } else if (selectedSession && selectedProject) {//切换sessionId
+        console.log("Switching sessionId, loading latest messages");
+        loadLatestMessages();
         // Reset pagination state when switching sessions
         setMessagesOffset(0);
         setHasMoreMessages(false);
@@ -250,7 +296,7 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
     };
 
     loadMessages();
-  }, [selectedSession, selectedProject, scrollToBottom, isSystemSessionChange]);
+  }, [selectedSession, scrollToBottom, isSystemSessionChange]);
 
   // Update chatMessages when convertedMessages changes
   useEffect(() => {

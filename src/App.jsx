@@ -235,11 +235,10 @@ function AppContent() {
           setSelectedProject(project);
           setSelectedSession({ ...session, __provider: 'claude' });
           // console.log("setSelectedSession({ ...session, __provider: 'claude' });");
-          // 总是导航到chat
           // Only switch to chat tab if we're loading a different session
-          //if (shouldSwitchTab) {
-          setActiveTab('chat');
-          //}
+          if (shouldSwitchTab) {
+            setActiveTab('chat');
+          }
           return;
         }
       }
