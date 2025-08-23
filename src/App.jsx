@@ -47,6 +47,7 @@ function AppContent() {
   const [selectedProject, setSelectedProject] = useState(null);
   const [selectedSession, setSelectedSession] = useState(null);
   const [sessionStates, setSessionStates] = useState(new Map()); // Track running sessions
+  const [sessionTemp, setSessionTemp] = useState(null); // 临时存储 sessionTemp
   // Track active tab per project - each project remembers its own tab state
   const [projectTabs, setProjectTabs] = useState({}); // project.name -> activeTab
   const activeTab = selectedProject ? (projectTabs[selectedProject.name] || 'chat') : 'chat';
@@ -139,9 +140,27 @@ function AppContent() {
 
         if (updatedProject) {
           setProjects(prevProjects => {
-            const newProjects = prevProjects.map(p =>
-              p.name === targetProjectName ? updatedProject : p
-            );
+            const newProjects = prevProjects.map(p => {
+              if (p.name === targetProjectName) {
+                // 检查是否有需要保存的 sessionTemp
+                if (sessionTemp && sessionTemp.projectName === targetProjectName) {
+                  const existingSession = updatedProject.sessions?.find(s => s.id === sessionTemp.id);
+
+                  if (!existingSession) {
+                    // sessionTemp 不在更新的项目中，添加临时值
+                    return {
+                      ...updatedProject,
+                      sessions: [sessionTemp, ...(updatedProject.sessions || [])]
+                    };
+                  } else {
+                    // sessionTemp 存在于项目中，移除临时存储
+                    setSessionTemp(null);
+                  }
+                }
+                return updatedProject;
+              }
+              return p;
+            });
             return newProjects;
           });
 
@@ -160,7 +179,29 @@ function AppContent() {
           }
         }
       } else if (latestMessage.type === "session-created") {
+        //新的session的创建
         console.log("🆕 Session created:", latestMessage.sessionId);
+        const { lastSessionId, sessionTemp: newSessionTemp } = latestMessage;
+
+        // 保存 sessionTemp 到内存状态
+        setSessionTemp(newSessionTemp);
+
+        setProjects(prevProjects => {
+          const newProjects = prevProjects.map(p =>
+            p.name === newSessionTemp.projectName ? {
+              ...p,
+              sessions: [newSessionTemp, ...(p.sessions || [])]
+            } : p
+          );
+          return newProjects;
+        });
+
+        if (lastSessionId && lastSessionId === selectedSession?.id) {
+          setSelectedSession(newSessionTemp);
+          setActiveTab('chat');
+          navigate(`/session/${newSessionTemp.id}`);
+        }
+
       }
       loadSessionStates();
     }

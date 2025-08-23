@@ -61,7 +61,7 @@ function getSessionState(sessionId) {
 async function spawnClaude(command, options = {}, ws) {
   return new Promise((resolve, reject) => {
     (async () => {
-      const { sessionId, projectPath, cwd, resume, toolsSettings, permissionMode, images } = options;
+      const { sessionId, projectName, projectPath, cwd, resume, toolsSettings, permissionMode, images } = options;
       let capturedSessionId = null;//应该是本次新id
       let sessionCreatedSent = false; // Track if we've already sent session-created event
 
@@ -353,7 +353,15 @@ async function spawnClaude(command, options = {}, ws) {
                 sessionCreatedSent = true;
                 ws.send(JSON.stringify({
                   type: 'session-created',
-                  sessionId: capturedSessionId
+                  lastSessionId: sessionId,
+                  sessionTemp: {
+                    id: capturedSessionId,
+                    summary: 'New Session',
+                    messageCount: 0,
+                    lastActivity: new Date(),
+                    cwd: "",
+                    projectName: projectName
+                  }
                 }));
               }
             }

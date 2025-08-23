@@ -79,6 +79,7 @@ function ChatInterface({ selectedProject, selectedSession, sessionActive, sendMe
   const [isTextareaExpanded, setIsTextareaExpanded] = useState(false);
   const [visibleMessageCount, setVisibleMessageCount] = useState(100);
   const [claudeStatus, setClaudeStatus] = useState(null);
+  const [showCreatingSessionModal, setShowCreatingSessionModal] = useState(false);
   const provider = localStorage.getItem('selected-provider') || 'claude';
 
 
@@ -259,7 +260,7 @@ function ChatInterface({ selectedProject, selectedSession, sessionActive, sendMe
         setMessagesOffset(0);
         setHasMoreMessages(false);
         setTotalMessages(0);
-
+        setShowCreatingSessionModal(false);
         {
           // For Claude, load messages normally with pagination
           setCurrentSessionId(selectedSession.id);
@@ -274,6 +275,7 @@ function ChatInterface({ selectedProject, selectedSession, sessionActive, sendMe
             if (autoScrollToBottom) {
               setTimeout(() => scrollToBottom(), 200);
             }
+
           } else {
             // Reset the flag after handling system session change
             setIsSystemSessionChange(false);
@@ -290,6 +292,8 @@ function ChatInterface({ selectedProject, selectedSession, sessionActive, sendMe
         setMessagesOffset(0);
         setHasMoreMessages(false);
         setTotalMessages(0);
+        setShowCreatingSessionModal(false);
+        setShowSwitchingSessionModal(false);
       }
     };
 
@@ -357,10 +361,17 @@ function ChatInterface({ selectedProject, selectedSession, sessionActive, sendMe
 
             // Store session ID for future reference
             // No session protection needed - server manages session state
+
+
           }
           break;
         //JSON格式输出
         case 'claude-response':
+          // 隐藏新会话创建中弹窗（如果还在显示的话）
+          if (showCreatingSessionModal) {
+            setShowCreatingSessionModal(false);
+          }
+
           const messageData = latestMessage.data.message || latestMessage.data;
 
           // Handle streaming format (content_block_delta / content_block_stop)
@@ -565,6 +576,11 @@ function ChatInterface({ selectedProject, selectedSession, sessionActive, sendMe
 
 
         case 'claude-error':
+          // 隐藏新会话创建中弹窗（如果还在显示的话）
+          if (showCreatingSessionModal) {
+            setShowCreatingSessionModal(false);
+          }
+
           setChatMessages(prev => [...prev, {
             type: 'error',
             content: `Error: ${latestMessage.error}`,
@@ -606,6 +622,11 @@ function ChatInterface({ selectedProject, selectedSession, sessionActive, sendMe
           }
           streamBufferRef.current = '';
           setClaudeStatus(null);
+
+          // 隐藏新会话创建中弹窗（如果还在显示的话）
+          if (showCreatingSessionModal) {
+            setShowCreatingSessionModal(false);
+          }
 
           // Session aborted - no special handling needed
 
@@ -846,6 +867,9 @@ function ChatInterface({ selectedProject, selectedSession, sessionActive, sendMe
     e.preventDefault();
     if (!input.trim() || sessionActive || !selectedProject) return;
 
+    // 显示新会话创建中弹窗 
+    setShowCreatingSessionModal(true);
+
 
     // Upload images first if any
     let uploadedImages = [];
@@ -935,6 +959,7 @@ function ChatInterface({ selectedProject, selectedSession, sessionActive, sendMe
       command: input,
       options: {
         projectPath: selectedProject.path,
+        projectName: selectedProject.name,
         cwd: selectedProject.fullPath,
         sessionId: currentSessionId,
         resume: !!currentSessionId,
@@ -1138,6 +1163,7 @@ function ChatInterface({ selectedProject, selectedSession, sessionActive, sendMe
               </div>
             </div>
           )}
+
           {isLoadingSessionMessages && chatMessages.length === 0 ? (
             <div className="text-center text-gray-500 dark:text-gray-400 mt-8">
               <div className="flex items-center justify-center space-x-2">
@@ -1312,6 +1338,15 @@ function ChatInterface({ selectedProject, selectedSession, sessionActive, sendMe
 
 
           <form onSubmit={handleSubmit} className="relative max-w-4xl mx-auto">
+            {/* Creating session modal overlay */}
+            {showCreatingSessionModal && (
+              <div className="absolute inset-0 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm flex items-center justify-center z-50 rounded-2xl">
+                <div className="flex items-center justify-center space-x-3">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+                  <p className="text-gray-700 dark:text-gray-300 font-medium">新对话创建中</p>
+                </div>
+              </div>
+            )}
             {/* Drag overlay */}
             {isDragActive && (
               <div className="absolute inset-0 bg-blue-500/20 border-2 border-dashed border-blue-500 rounded-lg flex items-center justify-center z-50">
