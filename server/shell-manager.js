@@ -1,4 +1,5 @@
 import pty from 'node-pty';
+import { generateClaudeEnvVars } from './utils/claude-config.js';
 
 /**
  * 持久Shell会话管理器
@@ -38,27 +39,31 @@ class ShellSessionManager {
      */
     async getOrCreateSession(projectPath, sessionId = null, cols = 80, rows = 24) {
         const sessionKey = this.generateSessionKey(projectPath);
-        
+
         // 如果会话已存在，返回现有会话
         if (this.sessions.has(sessionKey)) {
             const session = this.sessions.get(sessionKey);
             session.lastActiveAt = new Date();
-            
+
             // 调整终端大小
             if (session.ptyProcess && session.ptyProcess.resize) {
                 session.ptyProcess.resize(cols, rows);
             }
-            
+
             console.log(`🔄 Reusing existing shell session: ${sessionKey}`);
             return { session, isNew: false };
         }
 
         // 创建新的shell会话
         console.log(`🚀 Creating new shell session for project: ${projectPath}`);
-        
+
         // 如果有sessionId就恢复，否则启动新的claude会话
-        const startCommand = sessionId ? 
+        const startCommand = sessionId ?
             `claude --resume ${sessionId}` : 'claude';
+
+        // 生成Claude配置的环境变量
+        const claudeEnvVars = await generateClaudeEnvVars();
+        console.log(`🔧 Shell session using Claude env vars:`, Object.keys(claudeEnvVars));
 
         const ptyProcess = pty.spawn('bash', ['-c', `cd "${projectPath}" && ${startCommand}`], {
             name: 'xterm-256color',
@@ -66,6 +71,7 @@ class ShellSessionManager {
             rows: rows,
             env: {
                 ...process.env,
+                ...claudeEnvVars, // 添加Claude配置的环境变量
                 TERM: 'xterm-256color',
                 COLORTERM: 'truecolor',
                 FORCE_COLOR: '3'
@@ -93,7 +99,7 @@ class ShellSessionManager {
                 data,
                 timestamp: Date.now()
             });
-            
+
             if (sessionData.outputBuffer.length > 1000) {
                 sessionData.outputBuffer = sessionData.outputBuffer.slice(-800); // 保留最新800条
             }
@@ -111,7 +117,7 @@ class ShellSessionManager {
         });
 
         this.sessions.set(sessionKey, sessionData);
-        
+
         return { session: sessionData, isNew: true };
     }
 
@@ -121,7 +127,7 @@ class ShellSessionManager {
     attachWebSocket(projectPath, ws) {
         const sessionKey = this.generateSessionKey(projectPath);
         const session = this.sessions.get(sessionKey);
-        
+
         if (!session) {
             console.warn(`⚠️ Cannot attach WebSocket, session not found: ${sessionKey}`);
             return false;
@@ -152,7 +158,7 @@ class ShellSessionManager {
     detachWebSocket(projectPath) {
         const sessionKey = this.generateSessionKey(projectPath);
         const session = this.sessions.get(sessionKey);
-        
+
         if (session) {
             session.isConnected = false;
             session.currentWs = null;
@@ -160,7 +166,7 @@ class ShellSessionManager {
             console.log(`🔌 WebSocket detached from session: ${sessionKey} (shell continues running)`);
             return true;
         }
-        
+
         return false;
     }
 
@@ -170,13 +176,13 @@ class ShellSessionManager {
     writeToSession(projectPath, data) {
         const sessionKey = this.generateSessionKey(projectPath);
         const session = this.sessions.get(sessionKey);
-        
+
         if (session && session.ptyProcess) {
             session.ptyProcess.write(data);
             session.lastActiveAt = new Date();
             return true;
         }
-        
+
         return false;
     }
 
@@ -186,7 +192,7 @@ class ShellSessionManager {
     resizeSession(projectPath, cols, rows) {
         const sessionKey = this.generateSessionKey(projectPath);
         const session = this.sessions.get(sessionKey);
-        
+
         if (session && session.ptyProcess && session.ptyProcess.resize) {
             session.ptyProcess.resize(cols, rows);
             session.cols = cols;
@@ -195,7 +201,7 @@ class ShellSessionManager {
             console.log(`📏 Resized session ${sessionKey} to ${cols}x${rows}`);
             return true;
         }
-        
+
         return false;
     }
 
@@ -205,7 +211,7 @@ class ShellSessionManager {
     killSession(projectPath, force = false) {
         const sessionKey = this.generateSessionKey(projectPath);
         const session = this.sessions.get(sessionKey);
-        
+
         if (!session) {
             console.log(`ℹ️ Session ${sessionKey} not found for termination`);
             return true;
@@ -219,7 +225,7 @@ class ShellSessionManager {
             } else {
                 // 尝试优雅退出
                 session.ptyProcess.write('exit\r');
-                
+
                 // 5秒后强制杀死
                 setTimeout(() => {
                     if (this.sessions.has(sessionKey)) {
@@ -240,7 +246,7 @@ class ShellSessionManager {
     getSessionStatus(projectPath) {
         const sessionKey = this.generateSessionKey(projectPath);
         const session = this.sessions.get(sessionKey);
-        
+
         if (!session) {
             return { exists: false, sessionKey };
         }
@@ -284,15 +290,15 @@ class ShellSessionManager {
         }
 
         console.log(`🔄 Replaying ${session.outputBuffer.length} buffered output entries`);
-        
+
         // 发送分隔符
         this.sendToWebSocket(ws, `\r\n\x1b[2m--- Restoring previous output (${session.outputBuffer.length} entries) ---\x1b[0m\r\n`);
-        
+
         // 回放所有缓存的输出
         for (const item of session.outputBuffer) {
             this.sendToWebSocket(ws, item.data);
         }
-        
+
         // 发送分隔符
         this.sendToWebSocket(ws, '\r\n\x1b[2m--- End previous output ---\x1b[0m\r\n');
     }
@@ -359,9 +365,9 @@ class ShellSessionManager {
     cleanupInactiveSessions() {
         const now = new Date();
         const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
-        
+
         const sessionsToDelete = [];
-        
+
         for (const [key, session] of this.sessions) {
             if (session.lastActiveAt < twoHoursAgo && !session.isConnected) {
                 sessionsToDelete.push(key);
@@ -370,7 +376,7 @@ class ShellSessionManager {
 
         if (sessionsToDelete.length > 0) {
             console.log(`🧹 Cleaning up ${sessionsToDelete.length} inactive sessions`);
-            
+
             for (const key of sessionsToDelete) {
                 const session = this.sessions.get(key);
                 if (session && session.ptyProcess) {
@@ -386,7 +392,7 @@ class ShellSessionManager {
      */
     cleanup() {
         console.log('🧹 Cleaning up all shell sessions...');
-        
+
         if (this.cleanupInterval) {
             clearInterval(this.cleanupInterval);
             this.cleanupInterval = null;
@@ -397,7 +403,7 @@ class ShellSessionManager {
                 session.ptyProcess.kill();
             }
         }
-        
+
         this.sessions.clear();
     }
 }

@@ -15,7 +15,7 @@ export const API_PROVIDERS = {
   },
   gpt: {
     name: 'GPT',
-    icon: '/icons/openai-icon.svg', 
+    icon: '/icons/openai-icon.svg',
     models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'],
     docs: 'https://platform.openai.com/docs',
     description: 'OpenAI GPT系列模型',
@@ -31,7 +31,7 @@ export const API_PROVIDERS = {
   },
   qwen: {
     name: 'Qwen',
-    icon: '/icons/qwen-icon.svg', 
+    icon: '/icons/qwen-icon.svg',
     models: ['qwen-max', 'qwen-plus', 'qwen-turbo'],
     docs: 'https://help.aliyun.com/zh/dashscope/',
     description: '阿里云通义千问大模型',
@@ -63,23 +63,23 @@ const DEFAULT_CONFIG = {
  */
 function inferProviderFromModel(model) {
   if (!model) return 'claude';
-  
+
   const modelLower = model.toLowerCase();
-  
+
   if (modelLower.includes('claude')) return 'claude';
   if (modelLower.includes('gpt') || modelLower.includes('chatgpt')) return 'gpt';
   if (modelLower.includes('deepseek')) return 'deepseek';
   if (modelLower.includes('qwen')) return 'qwen';
-  
+
   // 对于不匹配的模型，返回"其它"
-  if (modelLower.includes('gemini') || 
-      modelLower.includes('llama') || 
-      modelLower.includes('mistral') ||
-      modelLower.includes('yi') ||
-      modelLower.includes('glm')) {
+  if (modelLower.includes('gemini') ||
+    modelLower.includes('llama') ||
+    modelLower.includes('mistral') ||
+    modelLower.includes('yi') ||
+    modelLower.includes('glm')) {
     return 'other';
   }
-  
+
   // 默认返回claude
   return 'claude';
 }
@@ -89,23 +89,23 @@ function inferProviderFromModel(model) {
  */
 function inferProviderFromBaseUrl(baseUrl) {
   if (!baseUrl) return null;
-  
+
   const urlLower = baseUrl.toLowerCase();
-  
+
   if (urlLower.includes('anthropic')) return 'claude';
-  if (urlLower.includes('openai')) return 'gpt'; 
+  if (urlLower.includes('openai')) return 'gpt';
   if (urlLower.includes('deepseek')) return 'deepseek';
   if (urlLower.includes('qwen') || urlLower.includes('dashscope')) return 'qwen';
-  
+
   // 其他服务商归类为"其它"
-  if (urlLower.includes('googleapis') || 
-      urlLower.includes('bigmodel') || 
-      urlLower.includes('zhipuai') ||
-      urlLower.includes('huggingface') ||
-      urlLower.includes('ollama')) {
+  if (urlLower.includes('googleapis') ||
+    urlLower.includes('bigmodel') ||
+    urlLower.includes('zhipuai') ||
+    urlLower.includes('huggingface') ||
+    urlLower.includes('ollama')) {
     return 'other';
   }
-  
+
   return null;
 }
 
@@ -119,9 +119,9 @@ export async function getApiConfig() {
     const response = await fetch('/api/claude/config', {
       headers: token ? { 'Authorization': `Bearer ${token}` } : {}
     });
-    
+
     let config = { ...DEFAULT_CONFIG };
-    
+
     if (response.ok) {
       try {
         const serverConfig = await response.json();
@@ -132,19 +132,19 @@ export async function getApiConfig() {
     } else {
       console.log('Failed to fetch server config, using defaults');
     }
-    
+
     // 从配置中推断提供商
     let inferredProvider = config.provider;
-    
+
     // 如果没有明确指定provider，尝试从模型名称和BaseURL推断
     if (!config.provider || config.provider === 'claude') {
       const modelProvider = inferProviderFromModel(config.model);
       const baseUrlProvider = inferProviderFromBaseUrl(config.baseUrl);
-      
+
       // 优先使用从BaseURL推断的提供商，其次是模型名称
       inferredProvider = baseUrlProvider || modelProvider || 'claude';
     }
-    
+
     return {
       provider: inferredProvider,
       model: config.model || '',
@@ -155,10 +155,10 @@ export async function getApiConfig() {
       httpsProxy: config.httpsProxy || '',
       providerInfo: API_PROVIDERS[inferredProvider] || API_PROVIDERS.claude
     };
-    
+
   } catch (error) {
     console.error('Error getting API config:', error);
-    
+
     // 发生错误时返回默认配置
     return {
       ...DEFAULT_CONFIG,
@@ -181,7 +181,7 @@ export async function saveApiConfig(config) {
       httpProxy: config.httpProxy,
       httpsProxy: config.httpsProxy
     };
-    
+
     // 保存到后端文件系统
     const token = localStorage.getItem('auth-token');
     const response = await fetch('/api/claude/config', {
@@ -192,7 +192,7 @@ export async function saveApiConfig(config) {
       },
       body: JSON.stringify(configToSave)
     });
-    
+
     if (response.ok) {
       const result = await response.json();
       console.log('Configuration saved to backend:', result.message);
@@ -219,46 +219,5 @@ export async function getCurrentProvider() {
   };
 }
 
-/**
- * 生成Claude进程的环境变量
- * 用于在启动Claude进程前注入配置
- */
-export async function generateClaudeEnvVars() {
-  try {
-    const config = await getApiConfig();
-    const envVars = {};
-    
-    // 添加API配置相关的环境变量
-    if (config.baseUrl) {
-      envVars.ANTHROPIC_BASE_URL = config.baseUrl;
-    }
-    
-    if (config.authToken) {
-      envVars.ANTHROPIC_AUTH_TOKEN = config.authToken;
-    }
-    
-    if (config.model) {
-      envVars.ANTHROPIC_MODEL = config.model;
-    }
-    
-    if (config.smallModel) {
-      envVars.ANTHROPIC_SMALL_FAST_MODEL = config.smallModel;
-    }
-    
-    if (config.httpProxy) {
-      envVars.HTTP_PROXY = config.httpProxy;
-    }
-    
-    if (config.httpsProxy) {
-      envVars.HTTPS_PROXY = config.httpsProxy;
-    }
-    
-    console.log('Generated Claude env vars:', Object.keys(envVars));
-    return envVars;
-  } catch (error) {
-    console.error('Error generating Claude env vars:', error);
-    return {};
-  }
-}
 
 // React Hook需要在React组件中单独定义，这里移除避免import问题
