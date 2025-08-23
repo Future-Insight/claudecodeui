@@ -1165,10 +1165,7 @@ function Sidebar({
                                             {messageCount}
                                           </Badge>
                                         )}
-                                        {/* Provider tiny icon */}
-                                        <span className="ml-1 opacity-70">
-                                          <ClaudeLogo className="w-3 h-3" />
-                                        </span>
+
                                       </div>
                                     </div>
                                   </div>

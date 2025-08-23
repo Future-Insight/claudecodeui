@@ -14,13 +14,13 @@ import ProjectPreview from './ProjectPreview';
 import ErrorBoundary from './ErrorBoundary';
 import ClaudeLogo from './ClaudeLogo';
 
-function MainContent({ 
-  selectedProject, 
-  selectedSession, 
-  activeTab, 
-  setActiveTab, 
-  ws, 
-  sendMessage, 
+function MainContent({
+  selectedProject,
+  selectedSession,
+  activeTab,
+  setActiveTab,
+  ws,
+  sendMessage,
   messages,
   isMobile,
   onMenuClick,
@@ -69,13 +69,13 @@ function MainContent({
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center text-gray-500 dark:text-gray-400">
             <div className="w-12 h-12 mx-auto mb-4">
-              <div 
-                className="w-full h-full rounded-full border-4 border-gray-200 border-t-blue-500" 
-                style={{ 
+              <div
+                className="w-full h-full rounded-full border-4 border-gray-200 border-t-blue-500"
+                style={{
                   animation: 'spin 1s linear infinite',
                   WebkitAnimation: 'spin 1s linear infinite',
                   MozAnimation: 'spin 1s linear infinite'
-                }} 
+                }}
               />
             </div>
             <h2 className="text-xl font-semibold mb-2">Loading Claude Code UI</h2>
@@ -172,10 +172,10 @@ function MainContent({
                 ) : (
                   <div>
                     <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">
-                      {activeTab === 'files' ? 'Project Files' : 
-                       activeTab === 'git' ? 'Git' : 
-                       activeTab === 'preview' ? '预览' : 
-                       activeTab.startsWith('shell-') ? 'Shell' : 'Project'}
+                      {activeTab === 'files' ? 'Project Files' :
+                        activeTab === 'git' ? 'Git' :
+                          activeTab === 'preview' ? '预览' :
+                            activeTab.startsWith('shell-') ? 'Shell' : 'Project'}
                     </h2>
                     <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
                       {selectedProject.displayName}
@@ -185,7 +185,7 @@ function MainContent({
               </div>
             </div>
           </div>
-          
+
           {/* Mobile refresh button - only show on chat tab */}
           {isMobile && activeTab === 'chat' && (
             <button
@@ -198,17 +198,16 @@ function MainContent({
               </svg>
             </button>
           )}
-          
+
           {/* Modern Tab Navigation - Right Side */}
           <div className="flex-shrink-0 hidden sm:block">
             <div className="relative flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
               <button
                 onClick={() => setActiveTab('chat')}
-                className={`relative px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md ${
-                  activeTab === 'chat'
+                className={`relative px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md ${activeTab === 'chat'
                     ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
                     : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-gray-700'
-                }`}
+                  }`}
               >
                 <span className="flex items-center gap-1 sm:gap-1.5">
                   <svg className="w-3 sm:w-3.5 h-3 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -219,11 +218,10 @@ function MainContent({
               </button>
               <button
                 onClick={() => setActiveTab(`shell-${selectedProject.name}`)}
-                className={`relative px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all duration-200 ${
-                  activeTab === `shell-${selectedProject.name}`
+                className={`relative px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all duration-200 ${activeTab === `shell-${selectedProject.name}`
                     ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
                     : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-gray-700'
-                }`}
+                  }`}
               >
                 <span className="flex items-center gap-1 sm:gap-1.5">
                   <svg className="w-3 sm:w-3.5 h-3 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -234,11 +232,10 @@ function MainContent({
               </button>
               <button
                 onClick={() => setActiveTab('files')}
-                className={`relative px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all duration-200 ${
-                  activeTab === 'files'
+                className={`relative px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all duration-200 ${activeTab === 'files'
                     ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
                     : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-gray-700'
-                }`}
+                  }`}
               >
                 <span className="flex items-center gap-1 sm:gap-1.5">
                   <svg className="w-3 sm:w-3.5 h-3 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -249,11 +246,10 @@ function MainContent({
               </button>
               <button
                 onClick={() => setActiveTab('git')}
-                className={`relative px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all duration-200 ${
-                  activeTab === 'git'
+                className={`relative px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all duration-200 ${activeTab === 'git'
                     ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
                     : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-gray-700'
-                }`}
+                  }`}
               >
                 <span className="flex items-center gap-1 sm:gap-1.5">
                   <svg className="w-3 sm:w-3.5 h-3 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -264,12 +260,11 @@ function MainContent({
               </button>
               <button
                 onClick={() => setActiveTab('preview')}
-                className={`relative px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all duration-200 ${
-                  activeTab === 'preview'
+                className={`relative px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all duration-200 ${activeTab === 'preview'
                     ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
                     : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-gray-700'
-                }`}
-              > 
+                  }`}
+              >
                 <span className="flex items-center gap-1 sm:gap-1.5">
                   <svg className="w-3 sm:w-3.5 h-3 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
@@ -308,13 +303,13 @@ function MainContent({
         </div>
         {/* 为所有项目渲染Shell组件，保持连接状态 */}
         {projects && projects.map((project) => (
-          <div 
+          <div
             key={`shell-container-${project.name}`}
             className={`h-full overflow-hidden ${activeTab === `shell-${project.name}` ? 'block' : 'hidden'}`}
           >
-            <Shell 
+            <Shell
               key={`shell-${project.name}`} // 确保每个项目有独立的Shell实例
-              selectedProject={project} 
+              selectedProject={project}
               selectedSession={selectedProject && selectedProject.name === project.name ? selectedSession : null}
               isActive={activeTab === `shell-${project.name}`}
             />
@@ -324,7 +319,7 @@ function MainContent({
           <GitPanel selectedProject={selectedProject} isMobile={isMobile} />
         </div>
         <div className={`h-full overflow-hidden ${activeTab === 'preview' ? 'block' : 'hidden'}`}>
-          <ProjectPreview 
+          <ProjectPreview
             selectedProject={selectedProject}
             isMobile={isMobile}
           />

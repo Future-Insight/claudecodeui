@@ -53,7 +53,12 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
   const [totalMessages, setTotalMessages] = useState(0);
   const MESSAGES_PER_PAGE = 50;
   const [isSystemSessionChange, setIsSystemSessionChange] = useState(false);
-  const [permissionMode, setPermissionMode] = useState('default');
+  const [permissionMode, setPermissionMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return safeLocalStorage.getItem('permission_mode') || 'default';
+    }
+    return 'default';
+  });
   const [attachedImages, setAttachedImages] = useState([]);
   const [uploadingImages, setUploadingImages] = useState(new Map());
   const [imageErrors, setImageErrors] = useState(new Map());
@@ -527,6 +532,12 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
         case 'claude-complete':
           setIsLoading(false);
           setCanAbortSession(false);
+          // Clear streaming buffer if any remains
+          if (streamTimerRef.current) {
+            clearTimeout(streamTimerRef.current);
+            streamTimerRef.current = null;
+          }
+          streamBufferRef.current = '';
           setClaudeStatus(null);
 
           // Conversation completed - no session protection needed
@@ -548,6 +559,12 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
         case 'session-aborted':
           setIsLoading(false);
           setCanAbortSession(false);
+          // Clear streaming buffer if any remains
+          if (streamTimerRef.current) {
+            clearTimeout(streamTimerRef.current);
+            streamTimerRef.current = null;
+          }
+          streamBufferRef.current = '';
           setClaudeStatus(null);
 
           // Session aborted - no special handling needed
@@ -944,7 +961,9 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
       const modes = ['default', 'acceptEdits', 'bypassPermissions', 'plan'];
       const currentIndex = modes.indexOf(permissionMode);
       const nextIndex = (currentIndex + 1) % modes.length;
-      setPermissionMode(modes[nextIndex]);
+      const newMode = modes[nextIndex];
+      setPermissionMode(newMode);
+      safeLocalStorage.setItem('permission_mode', newMode);
       return;
     }
 
@@ -1040,7 +1059,9 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
     const modes = ['default', 'acceptEdits', 'bypassPermissions', 'plan'];
     const currentIndex = modes.indexOf(permissionMode);
     const nextIndex = (currentIndex + 1) % modes.length;
-    setPermissionMode(modes[nextIndex]);
+    const newMode = modes[nextIndex];
+    setPermissionMode(newMode);
+    safeLocalStorage.setItem('permission_mode', newMode);
   };
 
   // Don't render if no project is selected
