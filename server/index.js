@@ -203,6 +203,90 @@ app.get('/api/config', authenticateToken, (req, res) => {
     });
 });
 
+// Claude configuration API endpoints
+app.get('/api/claude/config', authenticateToken, async (req, res) => {
+    try {
+        const homeDir = os.homedir();
+        const webuiConfigPath = path.join(homeDir, '.claude', 'claude-webui.json');
+        const settingsPath = path.join(homeDir, '.claude', 'settings.json');
+        
+        let config = {};
+        
+        // 读取环境变量
+        if (process.env.ANTHROPIC_BASE_URL) config.baseUrl = process.env.ANTHROPIC_BASE_URL;
+        if (process.env.ANTHROPIC_AUTH_TOKEN) config.authToken = process.env.ANTHROPIC_AUTH_TOKEN;
+        if (process.env.ANTHROPIC_MODEL) config.model = process.env.ANTHROPIC_MODEL;
+        if (process.env.ANTHROPIC_SMALL_FAST_MODEL) config.smallModel = process.env.ANTHROPIC_SMALL_FAST_MODEL;
+        if (process.env.HTTP_PROXY) config.httpProxy = process.env.HTTP_PROXY;
+        if (process.env.HTTPS_PROXY) config.httpsProxy = process.env.HTTPS_PROXY;
+        
+        // 读取settings.json中的模型配置
+        try {
+            const settingsData = await fsPromises.readFile(settingsPath, 'utf8');
+            const settings = JSON.parse(settingsData);
+            if (settings.env) {
+                if (settings.env.ANTHROPIC_MODEL) config.model = settings.env.ANTHROPIC_MODEL;
+                if (settings.env.ANTHROPIC_SMALL_FAST_MODEL) config.smallModel = settings.env.ANTHROPIC_SMALL_FAST_MODEL;
+            }
+        } catch (error) {
+            console.log('settings.json not found or invalid:', error.message);
+        }
+        
+        // 读取webui配置文件
+        try {
+            const webuiData = await fsPromises.readFile(webuiConfigPath, 'utf8');
+            const webuiConfig = JSON.parse(webuiData);
+            config = { ...config, ...webuiConfig };
+        } catch (error) {
+            console.log('claude-webui.json not found or invalid:', error.message);
+        }
+        
+        res.json(config);
+    } catch (error) {
+        console.error('Error reading Claude config:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/claude/config', authenticateToken, async (req, res) => {
+    try {
+        const { provider, model, smallModel, baseUrl, authToken, httpProxy, httpsProxy } = req.body;
+        const homeDir = os.homedir();
+        const claudeDir = path.join(homeDir, '.claude');
+        const webuiConfigPath = path.join(claudeDir, 'claude-webui.json');
+        
+        // 确保.claude目录存在
+        await fsPromises.mkdir(claudeDir, { recursive: true });
+        
+        // 保存到claude-webui.json，包括模型配置
+        const webuiConfig = {
+            provider,
+            model,
+            smallModel,
+            baseUrl,
+            authToken,
+            httpProxy,
+            httpsProxy,
+            lastUpdated: new Date().toISOString()
+        };
+        
+        // 过滤空值
+        Object.keys(webuiConfig).forEach(key => {
+            if (webuiConfig[key] === '' || webuiConfig[key] === null || webuiConfig[key] === undefined) {
+                delete webuiConfig[key];
+            }
+        });
+        
+        await fsPromises.writeFile(webuiConfigPath, JSON.stringify(webuiConfig, null, 2), 'utf8');
+        console.log('Saved claude-webui.json:', webuiConfig);
+        
+        res.json({ success: true, message: 'Configuration saved successfully' });
+    } catch (error) {
+        console.error('Error saving Claude config:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 app.get('/api/projects', authenticateToken, async (req, res) => {
     try {
         const projects = await getProjects();

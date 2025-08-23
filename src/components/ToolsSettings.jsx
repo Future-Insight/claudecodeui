@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
-import { X, Plus, Settings, Shield, AlertTriangle, Moon, Sun, Server, Edit3, Trash2, Globe, Terminal, Zap, FolderOpen } from 'lucide-react';
+import { X, Plus, Settings, Shield, AlertTriangle, Moon, Sun, Server, Edit3, Trash2, Globe, Terminal, Zap, FolderOpen, Bot, ExternalLink } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
+import { API_PROVIDERS, getApiConfig, saveApiConfig } from '../utils/apiConfig';
 
 function ToolsSettings({ isOpen, onClose, projects = [] }) {
   const { isDarkMode, toggleDarkMode } = useTheme();
@@ -41,6 +42,18 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
   const [mcpToolsLoading, setMcpToolsLoading] = useState({});
   const [activeTab, setActiveTab] = useState('tools');
   const [jsonValidationError, setJsonValidationError] = useState('');
+  
+  // API配置状态
+  const [apiConfig, setApiConfig] = useState({
+    provider: 'claude',
+    model: '',
+    smallModel: '',
+    baseUrl: '',
+    authToken: '',
+    httpProxy: '',
+    httpsProxy: ''
+  });
+  const [apiConfigLoading, setApiConfigLoading] = useState(true);
   // Common tool patterns for Claude
   const commonTools = [
     'Bash(git log:*)',
@@ -286,6 +299,34 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
         setProjectSortOrder('name');
       }
       
+      // Load API configuration
+      try {
+        setApiConfigLoading(true);
+        const currentApiConfig = await getApiConfig();
+        setApiConfig({
+          provider: currentApiConfig.provider || 'claude',
+          model: currentApiConfig.model || '',
+          smallModel: currentApiConfig.smallModel || '',
+          baseUrl: currentApiConfig.baseUrl || '',
+          authToken: currentApiConfig.authToken || '',
+          httpProxy: currentApiConfig.httpProxy || '',
+          httpsProxy: currentApiConfig.httpsProxy || ''
+        });
+      } catch (error) {
+        console.error('Error loading API config:', error);
+        setApiConfig({
+          provider: 'claude',
+          model: '',
+          smallModel: '',
+          baseUrl: '',
+          authToken: '',
+          httpProxy: '',
+          httpsProxy: ''
+        });
+      } finally {
+        setApiConfigLoading(false);
+      }
+      
       // Load MCP servers from API
       await fetchMcpServers();
     } catch (error) {
@@ -298,7 +339,7 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
     }
   };
 
-  const saveSettings = () => {
+  const saveSettings = async () => {
     setIsSaving(true);
     setSaveStatus(null);
     
@@ -314,6 +355,14 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
       
       // Save to localStorage
       localStorage.setItem('claude-tools-settings', JSON.stringify(claudeSettings));
+      
+      // Save API configuration (now async)
+      const apiConfigSuccess = await saveApiConfig(apiConfig);
+      
+      if (apiConfigSuccess) {
+        // 触发配置变更事件，通知其他组件更新
+        window.dispatchEvent(new CustomEvent('apiConfigChanged'));
+      }
       
       setSaveStatus('success');
       
@@ -443,7 +492,7 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
   };
 
   const handleMcpDelete = async (serverId, scope) => {
-    if (confirm('Are you sure you want to delete this MCP server?')) {
+    if (confirm('确定要删除这个 MCP 服务器吗？')) {
       try {
         await deleteMcpServer(serverId, scope);
         setSaveStatus('success');
@@ -520,7 +569,7 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
           <div className="flex items-center gap-3">
             <Settings className="w-5 h-5 md:w-6 md:h-6 text-blue-600" />
             <h2 className="text-lg md:text-xl font-semibold text-foreground">
-              Settings
+              设置
             </h2>
           </div>
           <Button
@@ -545,7 +594,27 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
                     : 'border-transparent text-muted-foreground hover:text-foreground'
                 }`}
               >
-                Tools
+                工具
+              </button>
+              <button
+                onClick={() => setActiveTab('api')}
+                className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === 'api'
+                    ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                接口
+              </button>
+              <button
+                onClick={() => setActiveTab('network')}
+                className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === 'network'
+                    ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                网络
               </button>
               <button
                 onClick={() => setActiveTab('appearance')}
@@ -555,12 +624,273 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
                     : 'border-transparent text-muted-foreground hover:text-foreground'
                 }`}
               >
-                Appearance
+                外观
               </button>
             </div>
           </div>
 
           <div className="p-4 md:p-6 space-y-6 md:space-y-8 pb-safe-area-inset-bottom">
+            
+            {/* API Configuration Tab */}
+            {activeTab === 'api' && (
+              <div className="space-y-6 md:space-y-8">
+                
+                {/* API Provider Selection */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <Bot className="w-5 h-5 text-blue-500" />
+                    <h3 className="text-lg font-medium text-foreground">
+                      AI提供商
+                    </h3>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    选择AI模型提供商和相关配置
+                  </p>
+                  
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    {Object.entries(API_PROVIDERS).map(([key, provider]) => (
+                      <div
+                        key={key}
+                        className={`p-3 rounded-lg border-2 transition-all ${
+                          apiConfig.provider === key
+                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                            : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                        }`}
+                      >
+                        <button
+                          onClick={() => setApiConfig(prev => ({ ...prev, provider: key }))}
+                          className="w-full text-center"
+                        >
+                          <div className="flex flex-col items-center gap-2">
+                            <img 
+                              src={provider.icon} 
+                              alt={provider.name} 
+                              className="w-8 h-8"
+                              onError={(e) => {
+                                e.target.src = '/icons/claude-ai-icon.svg';
+                              }}
+                            />
+                            <div>
+                              <div className="flex items-center justify-center gap-1 mb-1">
+                                <span className="font-medium text-sm">{provider.name}</span>
+                                {apiConfig.provider === key && (
+                                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </button>
+                        <div className="mt-2 text-center">
+                          {provider.docs && provider.docs !== '#' ? (
+                            <a
+                              href={provider.docs}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <span>文档</span>
+                              <ExternalLink className="w-2 h-2" />
+                            </a>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">通用配置</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Model Configuration */}
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="text-md font-medium text-foreground">模型配置 
+                      <span className="text-xs text-muted-foreground font-normal ml-2">(可选)</span>
+                    </h4>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      如不指定，将使用默认模型或环境变量中的配置
+                    </p>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">
+                        主模型 (ANTHROPIC_MODEL) 
+                        <span className="text-xs text-muted-foreground font-normal">可选</span>
+                      </label>
+                      <div className="relative">
+                        <Input
+                          value={apiConfig.model}
+                          onChange={(e) => setApiConfig(prev => ({ ...prev, model: e.target.value }))}
+                          placeholder="输入模型名称"
+                          className="w-full"
+                        />
+                        {API_PROVIDERS[apiConfig.provider]?.models.length > 0 && (
+                          <div className="mt-1">
+                            <div className="text-xs text-muted-foreground mb-1">常用模型:</div>
+                            <div className="flex flex-wrap gap-1">
+                              {API_PROVIDERS[apiConfig.provider].models.map(model => (
+                                <button
+                                  key={model}
+                                  type="button"
+                                  onClick={() => setApiConfig(prev => ({ ...prev, model }))}
+                                  className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded border border-gray-200 dark:border-gray-700 transition-colors"
+                                >
+                                  {model}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">
+                        小模型 (ANTHROPIC_SMALL_FAST_MODEL) 
+                        <span className="text-xs text-muted-foreground font-normal">可选</span>
+                      </label>
+                      <div className="relative">
+                        <Input
+                          value={apiConfig.smallModel}
+                          onChange={(e) => setApiConfig(prev => ({ ...prev, smallModel: e.target.value }))}
+                          placeholder="输入小模型名称"
+                          className="w-full"
+                        />
+                        {API_PROVIDERS[apiConfig.provider]?.models.length > 0 && (
+                          <div className="mt-1">
+                            <div className="text-xs text-muted-foreground mb-1">常用模型:</div>
+                            <div className="flex flex-wrap gap-1">
+                              {API_PROVIDERS[apiConfig.provider].models.map(model => (
+                                <button
+                                  key={model}
+                                  type="button"
+                                  onClick={() => setApiConfig(prev => ({ ...prev, smallModel: model }))}
+                                  className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded border border-gray-200 dark:border-gray-700 transition-colors"
+                                >
+                                  {model}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* API Endpoint Configuration */}
+                <div className="space-y-4">
+                  <h4 className="text-md font-medium text-foreground">接口端点配置</h4>
+                  
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">
+                        Base URL (ANTHROPIC_BASE_URL)
+                      </label>
+                      <Input
+                        value={apiConfig.baseUrl}
+                        onChange={(e) => setApiConfig(prev => ({ ...prev, baseUrl: e.target.value }))}
+                        placeholder="https://api.anthropic.com"
+                        className="font-mono text-sm"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        留空使用默认端点，或设置代理/第三方端点
+                      </p>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">
+                        授权密钥 (ANTHROPIC_AUTH_TOKEN)
+                      </label>
+                      <Input
+                        type="password"
+                        value={apiConfig.authToken}
+                        onChange={(e) => setApiConfig(prev => ({ ...prev, authToken: e.target.value }))}
+                        placeholder="your-api-key"
+                        className="font-mono text-sm"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        API密钥，请妥善保管
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+
+
+                {/* Configuration Examples */}
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                  <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-3">
+                    配置示例：
+                  </h4>
+                  <div className="space-y-3 text-sm">
+                    
+                    <div>
+                      <div className="font-medium text-blue-800 dark:text-blue-200 mb-1">DeepSeek:</div>
+                      <div className="bg-blue-100 dark:bg-blue-800 p-2 rounded font-mono text-xs">
+                        <div>配置保存到 ~/.claude/claude-webui.json</div>
+                        <div>claude-cli 可以读取此配置文件</div>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <div className="font-medium text-blue-800 dark:text-blue-200 mb-1">环境变量 (优先级最高):</div>
+                      <div className="bg-blue-100 dark:bg-blue-800 p-2 rounded font-mono text-xs">
+                        <div>export ANTHROPIC_BASE_URL=https://open.bigmodel.cn/api/anthropic</div>
+                        <div>export ANTHROPIC_MODEL=glm-4.5</div>
+                        <div>export ANTHROPIC_AUTH_TOKEN=YOUR_API_KEY</div>
+                      </div>
+                    </div>
+                    
+                  </div>
+                </div>
+                
+              </div>
+            )}
+            
+            {/* Network Configuration Tab */}
+            {activeTab === 'network' && (
+              <div className="space-y-6 md:space-y-8">
+                
+                {/* Proxy Settings */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <Globe className="w-5 h-5 text-green-500" />
+                    <h3 className="text-lg font-medium text-foreground">
+                      代理配置
+                    </h3>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">
+                        HTTP代理
+                      </label>
+                      <Input
+                        value={apiConfig.httpProxy}
+                        onChange={(e) => setApiConfig(prev => ({ ...prev, httpProxy: e.target.value }))}
+                        placeholder="http://localhost:10888"
+                        className="font-mono text-sm"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">
+                        HTTPS代理
+                      </label>
+                      <Input
+                        value={apiConfig.httpsProxy}
+                        onChange={(e) => setApiConfig(prev => ({ ...prev, httpsProxy: e.target.value }))}
+                        placeholder="http://localhost:10888"
+                        className="font-mono text-sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+                
+              </div>
+            )}
             
             {/* Appearance Tab */}
             {activeTab === 'appearance' && (
@@ -573,10 +903,10 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
         <div className="flex items-center justify-between">
           <div>
             <div className="font-medium text-foreground">
-              Dark Mode
+              深色模式
             </div>
             <div className="text-sm text-muted-foreground">
-              Toggle between light and dark themes
+              切换浅色和深色主题
             </div>
           </div>
           <button
@@ -609,10 +939,10 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
         <div className="flex items-center justify-between">
           <div>
             <div className="font-medium text-foreground">
-              Project Sorting
+              项目排序
             </div>
             <div className="text-sm text-muted-foreground">
-              How projects are ordered in the sidebar
+              侧边栏中项目的排列方式
             </div>
           </div>
           <select
@@ -620,8 +950,8 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
             onChange={(e) => setProjectSortOrder(e.target.value)}
             className="text-sm bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2 w-32"
           >
-            <option value="name">Alphabetical</option>
-            <option value="date">Recent Activity</option>
+            <option value="name">按字母顺序</option>
+            <option value="date">按最近活动</option>
           </select>
         </div>
       </div>
@@ -644,7 +974,7 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
               <div className="flex items-center gap-3">
                 <AlertTriangle className="w-5 h-5 text-orange-500" />
                 <h3 className="text-lg font-medium text-foreground">
-                  Permission Settings
+                  权限设置
                 </h3>
               </div>
               <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
@@ -657,10 +987,10 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
                   />
                   <div>
                     <div className="font-medium text-orange-900 dark:text-orange-100">
-                      Skip permission prompts (use with caution)
+                      跳过权限提示（谨慎使用）
                     </div>
                     <div className="text-sm text-orange-700 dark:text-orange-300">
-                      Equivalent to --dangerously-skip-permissions flag
+                      等同于 --dangerously-skip-permissions 标志
                     </div>
                   </div>
                 </label>
@@ -672,18 +1002,18 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
               <div className="flex items-center gap-3">
                 <Shield className="w-5 h-5 text-green-500" />
                 <h3 className="text-lg font-medium text-foreground">
-                  Allowed Tools
+                  允许的工具
                 </h3>
               </div>
               <p className="text-sm text-muted-foreground">
-                Tools that are automatically allowed without prompting for permission
+                无需权限提示即可自动允许的工具
               </p>
               
               <div className="flex flex-col sm:flex-row gap-2">
                 <Input
                   value={newAllowedTool}
                   onChange={(e) => setNewAllowedTool(e.target.value)}
-                  placeholder='e.g., "Bash(git log:*)" or "Write"'
+                  placeholder='例如："Bash(git log:*)" 或 "Write"'
                   onKeyPress={(e) => {
                     if (e.key === 'Enter') {
                       addAllowedTool(newAllowedTool);
@@ -699,14 +1029,14 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
                   className="h-10 px-4 touch-manipulation"
                 >
                   <Plus className="w-4 h-4 mr-2 sm:mr-0" />
-                  <span className="sm:hidden">Add Tool</span>
+                  <span className="sm:hidden">添加工具</span>
                 </Button>
               </div>
 
               {/* Common tools quick add */}
               <div className="space-y-2">
                 <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Quick add common tools:
+                  快速添加常用工具：
                 </p>
                 <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
                   {commonTools.map(tool => (
@@ -742,7 +1072,7 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
                 ))}
                 {allowedTools.length === 0 && (
                   <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                    No allowed tools configured
+                    未配置允许的工具
                   </div>
                 )}
               </div>
@@ -753,18 +1083,18 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
               <div className="flex items-center gap-3">
                 <AlertTriangle className="w-5 h-5 text-red-500" />
                 <h3 className="text-lg font-medium text-foreground">
-                  Disallowed Tools
+                  禁止的工具
                 </h3>
               </div>
               <p className="text-sm text-muted-foreground">
-                Tools that are automatically blocked without prompting for permission
+                无需权限提示即可自动阻止的工具
               </p>
               
               <div className="flex flex-col sm:flex-row gap-2">
                 <Input
                   value={newDisallowedTool}
                   onChange={(e) => setNewDisallowedTool(e.target.value)}
-                  placeholder='e.g., "Bash(rm:*)" or "Write"'
+                  placeholder='例如："Bash(rm:*)" 或 "Write"'
                   onKeyPress={(e) => {
                     if (e.key === 'Enter') {
                       addDisallowedTool(newDisallowedTool);
@@ -780,7 +1110,7 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
                   className="h-10 px-4 touch-manipulation"
                 >
                   <Plus className="w-4 h-4 mr-2 sm:mr-0" />
-                  <span className="sm:hidden">Add Tool</span>
+                  <span className="sm:hidden">添加工具</span>
                 </Button>
               </div>
 
@@ -802,7 +1132,7 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
                 ))}
                 {disallowedTools.length === 0 && (
                   <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                    No disallowed tools configured
+                    未配置禁止的工具
                   </div>
                 )}
               </div>
@@ -811,14 +1141,14 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
             {/* Help Section */}
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
               <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-2">
-                Tool Pattern Examples:
+                工具模式示例：
               </h4>
               <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
-                <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">"Bash(git log:*)"</code> - Allow all git log commands</li>
-                <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">"Bash(git diff:*)"</code> - Allow all git diff commands</li>
-                <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">"Write"</code> - Allow all Write tool usage</li>
-                <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">"Read"</code> - Allow all Read tool usage</li>
-                <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">"Bash(rm:*)"</code> - Block all rm commands (dangerous)</li>
+                <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">"Bash(git log:*)"</code> - 允许所有 git log 命令</li>
+                <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">"Bash(git diff:*)"</code> - 允许所有 git diff 命令</li>
+                <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">"Write"</code> - 允许所有 Write 工具使用</li>
+                <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">"Read"</code> - 允许所有 Read 工具使用</li>
+                <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">"Bash(rm:*)"</code> - 阻止所有 rm 命令（危险）</li>
               </ul>
             </div>
 
@@ -827,12 +1157,12 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
               <div className="flex items-center gap-3">
                 <Server className="w-5 h-5 text-purple-500" />
                 <h3 className="text-lg font-medium text-foreground">
-                  MCP Servers
+                  MCP 服务器
                 </h3>
               </div>
               <div className="space-y-2">
                 <p className="text-sm text-muted-foreground">
-                  Model Context Protocol servers provide additional tools and data sources to Claude
+                  模型上下文协议服务器为 Claude 提供额外的工具和数据源
                 </p>
               </div>
               
@@ -843,7 +1173,7 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
                   size="sm"
                 >
                   <Plus className="w-4 h-4 mr-2" />
-                  Add MCP Server
+                  添加 MCP 服务器
                 </Button>
               </div>
 
@@ -871,20 +1201,20 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
                         
                         <div className="text-sm text-muted-foreground space-y-1">
                           {server.type === 'stdio' && server.config.command && (
-                            <div>Command: <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-xs">{server.config.command}</code></div>
+                            <div>命令: <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-xs">{server.config.command}</code></div>
                           )}
                           {(server.type === 'sse' || server.type === 'http') && server.config.url && (
                             <div>URL: <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-xs">{server.config.url}</code></div>
                           )}
                           {server.config.args && server.config.args.length > 0 && (
-                            <div>Args: <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-xs">{server.config.args.join(' ')}</code></div>
+                            <div>参数: <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-xs">{server.config.args.join(' ')}</code></div>
                           )}
                           {server.config.env && Object.keys(server.config.env).length > 0 && (
-                            <div>Environment: <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-xs">{Object.entries(server.config.env).map(([k, v]) => `${k}=${v}`).join(', ')}</code></div>
+                            <div>环境: <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-xs">{Object.entries(server.config.env).map(([k, v]) => `${k}=${v}`).join(', ')}</code></div>
                           )}
                           {server.raw && (
                             <details className="mt-2">
-                              <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">View full config</summary>
+                              <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">查看完整配置</summary>
                               <pre className="mt-1 text-xs bg-gray-100 dark:bg-gray-800 p-2 rounded overflow-x-auto">
                                 {JSON.stringify(server.raw, null, 2)}
                               </pre>
@@ -913,11 +1243,11 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
                         {/* Tools Discovery Results */}
                         {mcpServerTools[server.id] && (
                           <div className="mt-2 p-2 rounded text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-200 border border-blue-200 dark:border-blue-800">
-                            <div className="font-medium mb-2">Available Tools & Resources</div>
+                            <div className="font-medium mb-2">可用工具和资源</div>
                             
                             {mcpServerTools[server.id].tools && mcpServerTools[server.id].tools.length > 0 && (
                               <div className="mb-2">
-                                <div className="font-medium text-xs mb-1">Tools ({mcpServerTools[server.id].tools.length}):</div>
+                                <div className="font-medium text-xs mb-1">工具 ({mcpServerTools[server.id].tools.length}):</div>
                                 <ul className="space-y-0.5">
                                   {mcpServerTools[server.id].tools.map((tool, i) => (
                                     <li key={i} className="flex items-start gap-1">
@@ -936,7 +1266,7 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
 
                             {mcpServerTools[server.id].resources && mcpServerTools[server.id].resources.length > 0 && (
                               <div className="mb-2">
-                                <div className="font-medium text-xs mb-1">Resources ({mcpServerTools[server.id].resources.length}):</div>
+                                <div className="font-medium text-xs mb-1">资源 ({mcpServerTools[server.id].resources.length}):</div>
                                 <ul className="space-y-0.5">
                                   {mcpServerTools[server.id].resources.map((resource, i) => (
                                     <li key={i} className="flex items-start gap-1">
@@ -955,7 +1285,7 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
 
                             {mcpServerTools[server.id].prompts && mcpServerTools[server.id].prompts.length > 0 && (
                               <div>
-                                <div className="font-medium text-xs mb-1">Prompts ({mcpServerTools[server.id].prompts.length}):</div>
+                                <div className="font-medium text-xs mb-1">提示词 ({mcpServerTools[server.id].prompts.length}):</div>
                                 <ul className="space-y-0.5">
                                   {mcpServerTools[server.id].prompts.map((prompt, i) => (
                                     <li key={i} className="flex items-start gap-1">
@@ -975,7 +1305,7 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
                             {(!mcpServerTools[server.id].tools || mcpServerTools[server.id].tools.length === 0) &&
                              (!mcpServerTools[server.id].resources || mcpServerTools[server.id].resources.length === 0) &&
                              (!mcpServerTools[server.id].prompts || mcpServerTools[server.id].prompts.length === 0) && (
-                              <div className="text-xs opacity-75">No tools, resources, or prompts discovered</div>
+                              <div className="text-xs opacity-75">未发现工具、资源或提示词</div>
                             )}
                           </div>
                         )}
@@ -987,7 +1317,7 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
                           variant="ghost"
                           size="sm"
                           className="text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-                          title="Edit server"
+                          title="编辑服务器"
                         >
                           <Edit3 className="w-4 h-4" />
                         </Button>
@@ -996,7 +1326,7 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
                           variant="ghost"
                           size="sm"
                           className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                          title="Delete server"
+                          title="删除服务器"
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -1006,7 +1336,7 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
                 ))}
                 {mcpServers.length === 0 && (
                   <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                    No MCP servers configured
+                    未配置 MCP 服务器
                   </div>
                 )}
               </div>
@@ -1018,7 +1348,7 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
                 <div className="bg-background border border-border rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
                   <div className="flex items-center justify-between p-4 border-b border-border">
                     <h3 className="text-lg font-medium text-foreground">
-                      {editingMcpServer ? 'Edit MCP Server' : 'Add MCP Server'}
+                      {editingMcpServer ? '编辑 MCP 服务器' : '添加 MCP 服务器'}
                     </h3>
                     <Button variant="ghost" size="sm" onClick={resetMcpForm}>
                       <X className="w-4 h-4" />
@@ -1038,7 +1368,7 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
                             : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
                         }`}
                       >
-                        Form Input
+                        表单输入
                       </button>
                       <button
                         type="button"
@@ -1049,7 +1379,7 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
                             : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
                         }`}
                       >
-                        JSON Import
+                        JSON 导入
                       </button>
                     </div>
                     )}
@@ -1058,12 +1388,12 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
                     {mcpFormData.importMode === 'form' && editingMcpServer && (
                       <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
                         <label className="block text-sm font-medium text-foreground mb-2">
-                          Scope
+                          作用域
                         </label>
                         <div className="flex items-center gap-2">
                           {mcpFormData.scope === 'user' ? <Globe className="w-4 h-4" /> : <FolderOpen className="w-4 h-4" />}
                           <span className="text-sm">
-                            {mcpFormData.scope === 'user' ? 'User (Global)' : 'Project (Local)'}
+                            {mcpFormData.scope === 'user' ? '用户（全局）' : '项目（本地）'}
                           </span>
                           {mcpFormData.scope === 'local' && mcpFormData.projectPath && (
                             <span className="text-xs text-muted-foreground">
@@ -1072,7 +1402,7 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
                           )}
                         </div>
                         <p className="text-xs text-muted-foreground mt-2">
-                          Scope cannot be changed when editing an existing server
+                          编辑现有服务器时不能更改作用域
                         </p>
                       </div>
                     )}
@@ -1082,7 +1412,7 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
                       <div className="space-y-4">
                         <div>
                           <label className="block text-sm font-medium text-foreground mb-2">
-                            Scope *
+                            作用域 *
                           </label>
                           <div className="flex gap-2">
                             <button
@@ -1096,7 +1426,7 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
                             >
                               <div className="flex items-center justify-center gap-2">
                                 <Globe className="w-4 h-4" />
-                                <span>User (Global)</span>
+                                <span>用户（全局）</span>
                               </div>
                             </button>
                             <button
@@ -1110,14 +1440,14 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
                             >
                               <div className="flex items-center justify-center gap-2">
                                 <FolderOpen className="w-4 h-4" />
-                                <span>Project (Local)</span>
+                                <span>项目（本地）</span>
                               </div>
                             </button>
                           </div>
                           <p className="text-xs text-muted-foreground mt-2">
                             {mcpFormData.scope === 'user' 
-                              ? 'User scope: Available across all projects on your machine'
-                              : 'Local scope: Only available in the selected project'
+                              ? '用户作用域：在您机器上的所有项目中可用'
+                              : '本地作用域：仅在选定的项目中可用'
                             }
                           </p>
                         </div>
@@ -1126,7 +1456,7 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
                         {mcpFormData.scope === 'local' && !editingMcpServer && (
                           <div>
                             <label className="block text-sm font-medium text-foreground mb-2">
-                              Project *
+                              项目 *
                             </label>
                             <select
                               value={mcpFormData.projectPath}
@@ -1134,7 +1464,7 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
                               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-blue-500 focus:border-blue-500"
                               required={mcpFormData.scope === 'local'}
                             >
-                              <option value="">Select a project...</option>
+                              <option value="">选择一个项目...</option>
                               {projects.map(project => (
                                 <option key={project.name} value={project.path || project.fullPath}>
                                   {project.displayName || project.name}
@@ -1143,7 +1473,7 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
                             </select>
                             {mcpFormData.projectPath && (
                               <p className="text-xs text-muted-foreground mt-1">
-                                Path: {mcpFormData.projectPath}
+                                路径：{mcpFormData.projectPath}
                               </p>
                             )}
                           </div>
@@ -1155,14 +1485,14 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className={mcpFormData.importMode === 'json' ? 'md:col-span-2' : ''}>
                         <label className="block text-sm font-medium text-foreground mb-2">
-                          Server Name *
+                          服务器名称 *
                         </label>
                         <Input
                           value={mcpFormData.name}
                           onChange={(e) => {
                             setMcpFormData(prev => ({...prev, name: e.target.value}));
                           }}
-                          placeholder="my-server"
+                          placeholder="我的服务器"
                           required
                         />
                       </div>
@@ -1170,7 +1500,7 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
                       {mcpFormData.importMode === 'form' && (
                         <div>
                           <label className="block text-sm font-medium text-foreground mb-2">
-                            Transport Type *
+                            传输类型 *
                           </label>
                           <select
                             value={mcpFormData.type}
@@ -1192,7 +1522,7 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
                     {editingMcpServer && mcpFormData.raw && mcpFormData.importMode === 'form' && (
                       <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                         <h4 className="text-sm font-medium text-foreground mb-2">
-                          Configuration Details (from {editingMcpServer.scope === 'global' ? '~/.claude.json' : 'project config'})
+                          配置详情（来自 {editingMcpServer.scope === 'global' ? '~/.claude.json' : '项目配置'}）
                         </h4>
                         <pre className="text-xs bg-gray-100 dark:bg-gray-800 p-3 rounded overflow-x-auto">
                           {JSON.stringify(mcpFormData.raw, null, 2)}
@@ -1205,7 +1535,7 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
                       <div className="space-y-4">
                         <div>
                           <label className="block text-sm font-medium text-foreground mb-2">
-                            JSON Configuration *
+                            JSON 配置 *
                           </label>
                           <textarea
                             value={mcpFormData.jsonInput}
@@ -1217,18 +1547,18 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
                                   const parsed = JSON.parse(e.target.value);
                                   // Basic validation
                                   if (!parsed.type) {
-                                    setJsonValidationError('Missing required field: type');
+                                    setJsonValidationError('缺少必需字段: type');
                                   } else if (parsed.type === 'stdio' && !parsed.command) {
-                                    setJsonValidationError('stdio type requires a command field');
+                                    setJsonValidationError('stdio 类型需要 command 字段');
                                   } else if ((parsed.type === 'http' || parsed.type === 'sse') && !parsed.url) {
-                                    setJsonValidationError(`${parsed.type} type requires a url field`);
+                                    setJsonValidationError(`${parsed.type} 类型需要 url 字段`);
                                   } else {
                                     setJsonValidationError('');
                                   }
                                 }
                               } catch (err) {
                                 if (e.target.value.trim()) {
-                                  setJsonValidationError('Invalid JSON format');
+                                  setJsonValidationError('无效的 JSON 格式');
                                 } else {
                                   setJsonValidationError('');
                                 }
@@ -1243,7 +1573,7 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
                             <p className="text-xs text-red-500 mt-1">{jsonValidationError}</p>
                           )}
                           <p className="text-xs text-muted-foreground mt-2">
-                            Paste your MCP server configuration in JSON format. Example formats:
+                            粘贴您的 MCP 服务器 JSON 格式配置。示例格式:
                             <br />• stdio: {`{"type":"stdio","command":"npx","args":["@upstash/context7-mcp"]}`}
                             <br />• http/sse: {`{"type":"http","url":"https://api.example.com/mcp"}`}
                           </p>
@@ -1256,7 +1586,7 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
                       <div className="space-y-4">
                         <div>
                           <label className="block text-sm font-medium text-foreground mb-2">
-                            Command *
+                            命令 *
                           </label>
                           <Input
                             value={mcpFormData.config.command}
@@ -1268,7 +1598,7 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
                         
                         <div>
                           <label className="block text-sm font-medium text-foreground mb-2">
-                            Arguments (one per line)
+                            参数（每行一个）
                           </label>
                           <textarea
                             value={Array.isArray(mcpFormData.config.args) ? mcpFormData.config.args.join('\n') : ''}
@@ -1300,7 +1630,7 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
                     {mcpFormData.importMode === 'form' && (
                       <div>
                       <label className="block text-sm font-medium text-foreground mb-2">
-                        Environment Variables (KEY=value, one per line)
+                        环境变量（KEY=value，每行一个）
                       </label>
                       <textarea
                         value={Object.entries(mcpFormData.config.env || {}).map(([k, v]) => `${k}=${v}`).join('\n')}
@@ -1324,7 +1654,7 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
                     {mcpFormData.importMode === 'form' && (mcpFormData.type === 'sse' || mcpFormData.type === 'http') && (
                       <div>
                         <label className="block text-sm font-medium text-foreground mb-2">
-                          Headers (KEY=value, one per line)
+                          请求头（KEY=value，每行一个）
                         </label>
                         <textarea
                           value={Object.entries(mcpFormData.config.headers || {}).map(([k, v]) => `${k}=${v}`).join('\n')}
@@ -1348,14 +1678,14 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
 
                     <div className="flex justify-end gap-2 pt-4">
                       <Button type="button" variant="outline" onClick={resetMcpForm}>
-                        Cancel
+                        取消
                       </Button>
                       <Button 
                         type="submit" 
                         disabled={mcpLoading} 
                         className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50"
                       >
-                        {mcpLoading ? 'Saving...' : (editingMcpServer ? 'Update Server' : 'Add Server')}
+                        {mcpLoading ? '保存中...' : (editingMcpServer ? '更新服务器' : '添加服务器')}
                       </Button>
                     </div>
                   </form>
@@ -1375,7 +1705,7 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                 </svg>
-                Settings saved successfully!
+                设置保存成功！
               </div>
             )}
             {saveStatus === 'error' && (
@@ -1383,7 +1713,7 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                 </svg>
-                Failed to save settings
+                保存设置失败
               </div>
             )}
           </div>
@@ -1394,7 +1724,7 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
               disabled={isSaving}
               className="flex-1 sm:flex-none h-10 touch-manipulation"
             >
-              Cancel
+              取消
             </Button>
             <Button 
               onClick={saveSettings} 
@@ -1404,10 +1734,10 @@ function ToolsSettings({ isOpen, onClose, projects = [] }) {
               {isSaving ? (
                 <div className="flex items-center gap-2">
                   <div className="w-4 h-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                  Saving...
+                  保存中...
                 </div>
               ) : (
-                'Save Settings'
+                '保存设置'
               )}
             </Button>
           </div>
