@@ -1148,21 +1148,25 @@ function ChatInterface({ selectedProject, selectedSession, sessionActive, sendMe
           }
         `}
       </style>
-      <div className="h-full flex flex-col">
-        {/* Messages Area - Scrollable Middle Section */}
-        <div
-          ref={scrollContainerRef}
-          className="flex-1 overflow-y-auto overflow-x-hidden px-0 py-3 sm:p-4 space-y-2 sm:space-y-3 relative"
-        >
-          {/* Loading overlay for session switching */}
-          {isLoadingSessionMessages && (
-            <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[100]">
+      <div className="h-full flex flex-col relative">
+        {/* Loading overlay for session switching */}
+        {isLoadingSessionMessages && (
+          <>
+            <div className="absolute inset-0 bg-black bg-opacity-50 z-[99]"></div>
+            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[100]">
               <div className="flex items-center justify-center space-x-2 bg-white dark:bg-gray-800 px-4 py-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-600">
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
                 <p className="text-gray-700 dark:text-gray-300">切换会话中...</p>
               </div>
             </div>
-          )}
+          </>
+        )}
+        
+        {/* Messages Area - Scrollable Middle Section */}
+        <div
+          ref={scrollContainerRef}
+          className="flex-1 overflow-y-auto overflow-x-hidden px-0 py-3 sm:p-4 space-y-2 sm:space-y-3"
+        >
 
           {isLoadingSessionMessages && chatMessages.length === 0 ? (
             <div className="text-center text-gray-500 dark:text-gray-400 mt-8">
