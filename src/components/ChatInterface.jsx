@@ -1088,7 +1088,7 @@ function ChatInterface({ selectedProject, selectedSession, sendMessage, messages
         {/* Messages Area - Scrollable Middle Section */}
         <div
           ref={scrollContainerRef}
-          className="flex-1 overflow-y-auto overflow-x-hidden px-0 py-3 sm:p-4 space-y-3 sm:space-y-4 relative"
+          className="flex-1 overflow-y-auto overflow-x-hidden px-0 py-3 sm:p-4 space-y-2 sm:space-y-3 relative"
         >
           {/* Loading overlay for session switching */}
           {isLoadingSessionMessages && (
