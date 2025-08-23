@@ -971,7 +971,7 @@ function GitPanel({ selectedProject, isMobile }) {
                         ref={textareaRef}
                         value={commitMessage}
                         onChange={(e) => setCommitMessage(e.target.value)}
-                        placeholder="Message (Ctrl+Enter to commit)"
+                        placeholder="提交信息 (Ctrl+Enter 提交)"
                         className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 resize-none pr-20"
                         rows="3"
                         onKeyDown={(e) => {
