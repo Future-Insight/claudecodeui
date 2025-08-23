@@ -560,7 +560,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                               </svg>
                             </summary>
-                            <div className="mt-3 prose prose-sm max-w-none dark:prose-invert">
+                            <div className="mt-3 prose prose-xs max-w-none dark:prose-invert [&_h1]:text-lg [&_h2]:text-base [&_h3]:text-base [&_h4]:text-sm [&_h5]:text-sm [&_h6]:text-sm [&_h1]:font-bold [&_h2]:font-semibold [&_h3]:font-semibold [&_h4]:font-medium [&_h5]:font-medium [&_h6]:font-medium">
                               <ReactMarkdown>{planContent}</ReactMarkdown>
                             </div>
                           </details>
@@ -694,7 +694,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                                   <div className="flex items-center gap-2 mb-3">
                                     <span className="font-medium">Implementation Plan</span>
                                   </div>
-                                  <div className="prose prose-sm max-w-none dark:prose-invert">
+                                  <div className="prose prose-xs max-w-none dark:prose-invert [&_h1]:text-lg [&_h2]:text-base [&_h3]:text-base [&_h4]:text-sm [&_h5]:text-sm [&_h6]:text-sm [&_h1]:font-bold [&_h2]:font-semibold [&_h3]:font-semibold [&_h4]:font-medium [&_h5]:font-medium [&_h6]:font-medium">
                                     <ReactMarkdown>{planContent}</ReactMarkdown>
                                   </div>
                                 </div>
@@ -878,7 +878,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                                 </svg>
                                 View full output ({content.length} chars)
                               </summary>
-                              <div className="mt-2 prose prose-sm max-w-none prose-green dark:prose-invert">
+                              <div className="mt-2 prose prose-xs max-w-none prose-green dark:prose-invert [&_h1]:text-lg [&_h2]:text-base [&_h3]:text-base [&_h4]:text-sm [&_h5]:text-sm [&_h6]:text-sm">
                                 <ReactMarkdown>{content}</ReactMarkdown>
                               </div>
                             </details>
@@ -886,7 +886,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                         }
 
                         return (
-                          <div className="prose prose-sm max-w-none prose-green dark:prose-invert">
+                          <div className="prose prose-xs max-w-none prose-green dark:prose-invert [&_h1]:text-lg [&_h2]:text-base [&_h3]:text-base [&_h4]:text-sm [&_h5]:text-sm [&_h6]:text-sm">
                             <ReactMarkdown>{content}</ReactMarkdown>
                           </div>
                         );
@@ -1048,7 +1048,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                 )}
 
                 {message.type === 'assistant' ? (
-                  <div className="prose prose-sm max-w-none dark:prose-invert prose-gray [&_code]:!bg-transparent [&_code]:!p-0">
+                  <div className="prose prose-xs max-w-none dark:prose-invert prose-gray [&_code]:!bg-transparent [&_code]:!p-0 [&_h1]:text-lg [&_h2]:text-base [&_h3]:text-base [&_h4]:text-sm [&_h5]:text-sm [&_h6]:text-sm [&_h1]:font-bold [&_h2]:font-semibold [&_h3]:font-semibold [&_h4]:font-medium [&_h5]:font-medium [&_h6]:font-medium">
                     <ReactMarkdown
                       components={{
                         code: ({ node, inline, className, children, ...props }) => {
