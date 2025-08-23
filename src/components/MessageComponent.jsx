@@ -74,7 +74,7 @@ export const MessageComponent = memo(({ message, prevMessage, createDiff, onFile
                   <div className="flex-shrink-0  pr-3">
                     {!isGrouped && (
                       <div className="bg-blue-600 text-white px-2 py-1 rounded-full text-xs font-bold shadow-sm">
-                        你
+                        You
                       </div>
                     )}
                   </div>
