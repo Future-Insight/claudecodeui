@@ -51,7 +51,7 @@ class ShellSessionManager {
             }
 
             console.log(`🔄 Reusing existing shell session: ${sessionKey}`);
-            return { session, isNew: false };
+            return { session, isNew: false, startCommand: null };
         }
 
         // 创建新的shell会话
@@ -60,6 +60,8 @@ class ShellSessionManager {
         // 如果有sessionId就恢复，否则启动新的claude会话
         const startCommand = sessionId ?
             `claude --resume ${sessionId}` : 'claude';
+        
+        console.log(`📋 Starting command: ${startCommand}`);
 
         // 生成Claude配置的环境变量
         const claudeEnvVars = await generateClaudeEnvVars();
@@ -118,7 +120,7 @@ class ShellSessionManager {
 
         this.sessions.set(sessionKey, sessionData);
 
-        return { session: sessionData, isNew: true };
+        return { session: sessionData, isNew: true, startCommand };
     }
 
     /**
@@ -218,6 +220,16 @@ class ShellSessionManager {
         }
 
         console.log(`💀 Terminating session: ${sessionKey}`);
+
+        // 如果有连接的客户端，先通知它们session将被终止
+        if (session.isConnected && session.currentWs) {
+            this.sendToWebSocket(session.currentWs, '\r\n\x1b[33m🛑 Remote Shell session terminated by user\x1b[0m\r\n');
+            this.sendToWebSocket(session.currentWs, '\x1b[36mYou can start a new connection using the buttons above.\x1b[0m\r\n');
+            
+            // 保持WebSocket连接，只是标记session不再活跃
+            session.isConnected = false;
+            session.currentWs = null;
+        }
 
         if (session.ptyProcess) {
             if (force) {

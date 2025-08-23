@@ -588,6 +588,8 @@ wss.on('connection', (ws, request) => {
 
     if (pathname === '/shell') {
         handleShellConnection(ws);
+    } else if (pathname === '/plain-shell') {
+        handlePlainShellConnection(ws);
     } else if (pathname === '/ws') {
         handleChatConnection(ws);
     } else {
@@ -671,7 +673,7 @@ function handleShellConnection(ws) {
 
                 try {
                     // 获取或创建持久会话
-                    const { session, isNew } = await shellManager.getOrCreateSession(
+                    const { session, isNew, startCommand } = await shellManager.getOrCreateSession(
                         projectPath, sessionId, cols, rows
                     );
 
@@ -679,9 +681,15 @@ function handleShellConnection(ws) {
                     shellManager.attachWebSocket(projectPath, ws);
 
                     // 发送欢迎消息
-                    const welcomeMsg = isNew ?
-                        `\x1b[36m🚀 Started new persistent Claude session\x1b[0m\r\n` :
-                        `\x1b[36m🔄 Reconnected to existing Claude session\x1b[0m\r\n`;
+                    let welcomeMsg;
+                    if (isNew) {
+                        welcomeMsg = `\x1b[36m🚀 Started new persistent Claude session\x1b[0m\r\n`;
+                        if (startCommand) {
+                            welcomeMsg += `\x1b[33m📋 Command: ${startCommand}\x1b[0m\r\n`;
+                        }
+                    } else {
+                        welcomeMsg = `\x1b[36m🔄 Reconnected to existing Claude session\x1b[0m\r\n`;
+                    }
 
                     ws.send(JSON.stringify({
                         type: 'output',
@@ -744,6 +752,155 @@ function handleShellConnection(ws) {
         // 发生错误时也要断开连接
         if (currentProjectPath) {
             shellManager.detachWebSocket(currentProjectPath);
+        }
+    });
+}
+
+// Handle plain shell WebSocket connections (no Claude CLI, no server caching)
+function handlePlainShellConnection(ws) {
+    console.log('🐚 Plain Shell client connected');
+    let ptyProcess = null;
+    let currentProjectPath = null;
+
+    ws.on('message', async (message) => {
+        try {
+            const data = JSON.parse(message);
+
+            if (data.type === 'init') {
+                const projectPath = data.projectPath || process.cwd();
+                const cols = data.cols || 80;
+                const rows = data.rows || 24;
+
+                currentProjectPath = projectPath;
+
+                console.log('🚀 Initializing plain shell session');
+                console.log('📂 Project:', projectPath);
+
+                try {
+                    // Create a new pty process for each connection (no caching)
+                    const shell = process.env.SHELL || '/bin/bash';
+                    
+                    ptyProcess = pty.spawn(shell, ['-i'], {
+                        name: 'xterm-color',
+                        cols: cols,
+                        rows: rows,
+                        cwd: projectPath,
+                        env: {
+                            ...process.env,
+                            TERM: 'xterm-256color',
+                            COLORTERM: 'truecolor',
+                            // Force interactive shell
+                            PS1: process.env.PS1 || '\\[\\033[01;32m\\]\\u@\\h\\[\\033[00m\\]:\\[\\033[01;34m\\]\\w\\[\\033[00m\\]\\$ '
+                        }
+                    });
+
+                    // Handle output from pty
+                    ptyProcess.onData((data) => {
+                        if (ws.readyState === ws.OPEN) {
+                            ws.send(JSON.stringify({
+                                type: 'output',
+                                data: data
+                            }));
+                        }
+                    });
+
+                    // Handle pty exit
+                    ptyProcess.onExit(({ exitCode, signal }) => {
+                        console.log('🔚 Plain shell process exited:', { exitCode, signal });
+                        if (ws.readyState === ws.OPEN) {
+                            ws.send(JSON.stringify({
+                                type: 'output',
+                                data: `\r\n\x1b[33mShell session ended (exit code: ${exitCode})\x1b[0m\r\n`
+                            }));
+                            ws.close();
+                        }
+                    });
+
+                    // Send welcome message
+                    const welcomeMsg = `\x1b[32m🐚 Plain Shell started in ${projectPath}\x1b[0m\r\n`;
+                    ws.send(JSON.stringify({
+                        type: 'output',
+                        data: welcomeMsg
+                    }));
+
+                    // Send an initial empty command to ensure prompt is displayed
+                    setTimeout(() => {
+                        if (ptyProcess && ws.readyState === ws.OPEN) {
+                            // Send empty line to trigger prompt display
+                            ptyProcess.write('\r');
+                        }
+                    }, 200);
+
+                    console.log('🟢 Plain shell session created');
+
+                } catch (shellError) {
+                    console.error('❌ Error creating plain shell session:', shellError);
+                    ws.send(JSON.stringify({
+                        type: 'output',
+                        data: `\r\n\x1b[31mError: ${shellError.message}\x1b[0m\r\n`
+                    }));
+                }
+
+            } else if (data.type === 'input') {
+                // Send input to pty process
+                if (ptyProcess) {
+                    ptyProcess.write(data.data);
+                } else {
+                    console.warn('⚠️ No active pty process for input');
+                }
+
+            } else if (data.type === 'resize') {
+                // Resize pty process
+                const cols = data.cols || 80;
+                const rows = data.rows || 24;
+
+                if (ptyProcess) {
+                    try {
+                        ptyProcess.resize(cols, rows);
+                        console.log(`📐 Plain shell resized to ${cols}x${rows}`);
+                    } catch (resizeError) {
+                        console.warn('⚠️ Failed to resize pty:', resizeError.message);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('❌ Plain Shell WebSocket error:', error.message);
+            if (ws.readyState === ws.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'output',
+                    data: `\r\n\x1b[31mError: ${error.message}\x1b[0m\r\n`
+                }));
+            }
+        }
+    });
+
+    ws.on('close', () => {
+        console.log('🔌 Plain Shell client disconnected');
+        
+        // Kill the pty process when client disconnects
+        if (ptyProcess) {
+            try {
+                ptyProcess.kill();
+                console.log('🗑️ Plain shell process terminated');
+            } catch (error) {
+                console.warn('⚠️ Error killing pty process:', error.message);
+            }
+            ptyProcess = null;
+        }
+    });
+
+    ws.on('error', (error) => {
+        console.error('❌ Plain Shell WebSocket error:', error);
+        
+        // Kill the pty process on error
+        if (ptyProcess) {
+            try {
+                ptyProcess.kill();
+                console.log('🗑️ Plain shell process terminated due to error');
+            } catch (killError) {
+                console.warn('⚠️ Error killing pty process:', killError.message);
+            }
+            ptyProcess = null;
         }
     });
 }

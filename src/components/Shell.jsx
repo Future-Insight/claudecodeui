@@ -61,7 +61,7 @@ const clearOldSessionHistory = () => {
     const history = JSON.parse(localStorage.getItem(SESSION_HISTORY_KEY) || '{}');
     const now = Date.now();
     const oneDay = 24 * 60 * 60 * 1000; // 24 hours
-    
+
     const cleaned = {};
     for (const [key, value] of Object.entries(history)) {
       if (now - value.timestamp < oneDay) {
@@ -81,17 +81,17 @@ function Shell({ selectedProject, selectedSession, isActive }) {
   const ws = useRef(null);
   const [isConnected, setIsConnected] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
-  const [isRestarting, setIsRestarting] = useState(false);
   const [lastSessionId, setLastSessionId] = useState(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [sessionHistory, setSessionHistory] = useState(null);
   const [shellStatus, setShellStatus] = useState({ exists: false });
+  const [remoteSessionTerminated, setRemoteSessionTerminated] = useState(false);
 
   // Check shell session status for current project
   const checkShellStatus = async () => {
     if (!selectedProject) return;
-    
+
     try {
       const token = localStorage.getItem('auth-token');
       const response = await fetch(`/api/projects/${selectedProject.name}/shell-status`, {
@@ -99,11 +99,11 @@ function Shell({ selectedProject, selectedSession, isActive }) {
           'Authorization': `Bearer ${token}`
         }
       });
-      
+
       if (response.ok) {
         const status = await response.json();
         setShellStatus(status);
-        console.log('Shell status:', status);
+        //console.log('Shell status:', status);
       }
     } catch (error) {
       console.error('Failed to check shell status:', error);
@@ -113,7 +113,7 @@ function Shell({ selectedProject, selectedSession, isActive }) {
   // Kill shell session for current project
   const killShellSession = async () => {
     if (!selectedProject) return;
-    
+
     try {
       const token = localStorage.getItem('auth-token');
       const response = await fetch(`/api/projects/${selectedProject.name}/shell`, {
@@ -122,7 +122,7 @@ function Shell({ selectedProject, selectedSession, isActive }) {
           'Authorization': `Bearer ${token}`
         }
       });
-      
+
       if (response.ok) {
         console.log('Shell session terminated successfully');
         await checkShellStatus(); // Refresh status
@@ -137,7 +137,7 @@ function Shell({ selectedProject, selectedSession, isActive }) {
   // Toggle fullscreen mode
   const toggleFullscreen = () => {
     setIsFullscreen(!isFullscreen);
-    
+
     // Fit terminal after fullscreen toggle
     setTimeout(() => {
       if (fitAddon.current && terminal.current) {
@@ -156,70 +156,46 @@ function Shell({ selectedProject, selectedSession, isActive }) {
   };
 
 
-  // Connect to shell function
+  // Connect to shell function (with Claude CLI)
   const connectToShell = () => {
     if (!isInitialized || isConnected || isConnecting) return;
-    
+
     setIsConnecting(true);
-    
+    setRemoteSessionTerminated(false); // Clear remote termination state
+
     // Start the WebSocket connection
     connectWebSocket();
   };
 
+  // Connect to plain shell function (without Claude CLI, no server caching)
+  const connectToPlainShell = () => {
+    if (!isInitialized || isConnected || isConnecting) return;
+
+    setIsConnecting(true);
+    setRemoteSessionTerminated(false); // Clear remote termination state
+
+    // Start the WebSocket connection for plain shell
+    connectPlainWebSocket();
+  };
+
   // Disconnect from shell function
   const disconnectFromShell = () => {
-    
+
     if (ws.current) {
       ws.current.close();
       ws.current = null;
     }
-    
+
     // Clear terminal content completely
     if (terminal.current) {
       terminal.current.clear();
       terminal.current.write('\x1b[2J\x1b[H'); // Clear screen and move cursor to home
     }
-    
+
     setIsConnected(false);
     setIsConnecting(false);
   };
 
-  // Restart shell function
-  const restartShell = () => {
-    setIsRestarting(true);
-    
-    // Clear ALL session storage for this project to force fresh start
-    const sessionKeys = Array.from(shellSessions.keys()).filter(key => 
-      key.includes(selectedProject.name)
-    );
-    sessionKeys.forEach(key => shellSessions.delete(key));
-    
-    
-    // Close existing WebSocket
-    if (ws.current) {
-      ws.current.close();
-      ws.current = null;
-    }
-    
-    // Clear and dispose existing terminal
-    if (terminal.current) {
-      
-      // Dispose terminal immediately without writing text
-      terminal.current.dispose();
-      terminal.current = null;
-      fitAddon.current = null;
-    }
-    
-    // Reset states
-    setIsConnected(false);
-    setIsInitialized(false);
-    
-    
-    // Force re-initialization after cleanup
-    setTimeout(() => {
-      setIsRestarting(false);
-    }, 200);
-  };
 
   // Watch for session changes - but don't disconnect since we use one shell per project
   useEffect(() => {
@@ -243,39 +219,39 @@ function Shell({ selectedProject, selectedSession, isActive }) {
   useEffect(() => {
     // Clean old session history on component mount
     clearOldSessionHistory();
-    
-    if (!terminalRef.current || !selectedProject || isRestarting) {
+
+    if (!terminalRef.current || !selectedProject) {
       return;
     }
 
     // Create session key for this project
     const sessionKey = `project-${selectedProject.name}`;
-    
+
     // Check if we have an existing session
     const existingSession = shellSessions.get(sessionKey);
     const historyData = getSessionHistory(sessionKey);
-    
+
     // Set session history for display
     if (historyData && !isConnected) {
       setSessionHistory(historyData);
     }
-    
+
     if (existingSession && !terminal.current) {
-      
+
       try {
         // Reuse existing terminal
         terminal.current = existingSession.terminal;
         fitAddon.current = existingSession.fitAddon;
         ws.current = existingSession.ws;
         setIsConnected(existingSession.isConnected);
-        
+
         // Reattach to DOM - dispose existing element first if needed
         if (terminal.current.element && terminal.current.element.parentNode) {
           terminal.current.element.parentNode.removeChild(terminal.current.element);
         }
-        
+
         terminal.current.open(terminalRef.current);
-        
+
         setTimeout(() => {
           if (fitAddon.current) {
             fitAddon.current.fit();
@@ -290,7 +266,7 @@ function Shell({ selectedProject, selectedSession, isActive }) {
             }
           }
         }, 100);
-        
+
         setIsInitialized(true);
         return;
       } catch (error) {
@@ -335,7 +311,7 @@ function Shell({ selectedProject, selectedSession, isActive }) {
         cursorAccent: '#1e1e1e',
         selection: '#264f78',
         selectionForeground: '#ffffff',
-        
+
         // Standard ANSI colors (0-7)
         black: '#000000',
         red: '#cd3131',
@@ -345,7 +321,7 @@ function Shell({ selectedProject, selectedSession, isActive }) {
         magenta: '#bc3fbc',
         cyan: '#11a8cd',
         white: '#e5e5e5',
-        
+
         // Bright ANSI colors (8-15)
         brightBlack: '#666666',
         brightRed: '#f14c4c',
@@ -355,7 +331,7 @@ function Shell({ selectedProject, selectedSession, isActive }) {
         brightMagenta: '#d670d6',
         brightCyan: '#29b8db',
         brightWhite: '#ffffff',
-        
+
         // Extended colors for better Claude output
         extendedAnsi: [
           // 16-color palette extension for 256-color support
@@ -370,15 +346,15 @@ function Shell({ selectedProject, selectedSession, isActive }) {
     fitAddon.current = new FitAddon();
     const clipboardAddon = new ClipboardAddon();
     const webglAddon = new WebglAddon();
-    
+
     terminal.current.loadAddon(fitAddon.current);
     terminal.current.loadAddon(clipboardAddon);
-    
+
     try {
       terminal.current.loadAddon(webglAddon);
     } catch (error) {
     }
-    
+
     terminal.current.open(terminalRef.current);
 
     // Wait for terminal to be fully rendered, then fit
@@ -395,7 +371,7 @@ function Shell({ selectedProject, selectedSession, isActive }) {
         navigator.clipboard.writeText(terminal.current.getSelection());
         return false;
       }
-      
+
       // Ctrl+V or Cmd+V for paste
       if ((event.ctrlKey || event.metaKey) && event.key === 'v') {
         navigator.clipboard.readText().then(text => {
@@ -410,32 +386,32 @@ function Shell({ selectedProject, selectedSession, isActive }) {
         });
         return false;
       }
-      
+
       // Page Up/Down for scrolling
       if (event.key === 'PageUp') {
         terminal.current.scrollToTop();
         return false;
       }
-      
+
       if (event.key === 'PageDown') {
         terminal.current.scrollToBottom();
         return false;
       }
-      
+
       // Shift + Page Up/Down for line-by-line scrolling
       if (event.shiftKey && event.key === 'ArrowUp') {
         terminal.current.scrollLines(-1);
         return false;
       }
-      
+
       if (event.shiftKey && event.key === 'ArrowDown') {
         terminal.current.scrollLines(1);
         return false;
       }
-      
+
       return true;
     });
-    
+
     // Ensure terminal takes full space and notify backend of size
     setTimeout(() => {
       if (fitAddon.current) {
@@ -451,7 +427,7 @@ function Shell({ selectedProject, selectedSession, isActive }) {
         }
       }
     }, 100);
-    
+
     setIsInitialized(true);
 
     // Handle terminal input
@@ -488,11 +464,11 @@ function Shell({ selectedProject, selectedSession, isActive }) {
 
     return () => {
       resizeObserver.disconnect();
-      
+
       // Store session for reuse instead of disposing
       if (terminal.current && selectedProject) {
         const sessionKey = `project-${selectedProject.name}`;
-        
+
         try {
           const sessionData = {
             terminal: terminal.current,
@@ -500,9 +476,9 @@ function Shell({ selectedProject, selectedSession, isActive }) {
             ws: ws.current,
             isConnected: isConnected
           };
-          
+
           shellSessions.set(sessionKey, sessionData);
-          
+
           // Also save to localStorage for persistence across page reloads
           saveSessionHistory(sessionKey, {
             projectName: selectedProject.name,
@@ -510,12 +486,12 @@ function Shell({ selectedProject, selectedSession, isActive }) {
             isConnected: isConnected,
             lastActive: Date.now()
           });
-          
+
         } catch (error) {
         }
       }
     };
-  }, [terminalRef.current, selectedProject, isRestarting]);
+  }, [terminalRef.current, selectedProject]);
 
   // Fit terminal when tab becomes active
   useEffect(() => {
@@ -538,10 +514,10 @@ function Shell({ selectedProject, selectedSession, isActive }) {
     }, 100);
   }, [isActive, isInitialized]);
 
-  // WebSocket connection function (called manually)
+  // WebSocket connection function (called manually) - with Claude CLI
   const connectWebSocket = async () => {
     if (isConnecting || isConnected) return;
-    
+
     try {
       // Get authentication token
       const token = localStorage.getItem('auth-token');
@@ -549,7 +525,7 @@ function Shell({ selectedProject, selectedSession, isActive }) {
         console.error('No authentication token found for Shell WebSocket connection');
         return;
       }
-      
+
       // Fetch server configuration to get the correct WebSocket URL
       let wsBaseUrl;
       try {
@@ -560,7 +536,7 @@ function Shell({ selectedProject, selectedSession, isActive }) {
         });
         const config = await configResponse.json();
         wsBaseUrl = config.wsUrl;
-        
+
         // If the config returns localhost but we're not on localhost, use current host but with API server port
         if (wsBaseUrl.includes('localhost') && !window.location.hostname.includes('localhost')) {
           const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -574,28 +550,28 @@ function Shell({ selectedProject, selectedSession, isActive }) {
         const apiPort = window.location.port === '3001' ? '3002' : window.location.port;
         wsBaseUrl = `${protocol}//${window.location.hostname}:${apiPort}`;
       }
-      
+
       // Include token in WebSocket URL as query parameter
       const wsUrl = `${wsBaseUrl}/shell?token=${encodeURIComponent(token)}`;
-      
+
       ws.current = new WebSocket(wsUrl);
 
       ws.current.onopen = () => {
         setIsConnected(true);
         setIsConnecting(false);
         setSessionHistory(null); // Clear history info when connected
-        
+
         // Focus the terminal for keyboard input
         if (terminal.current) {
           terminal.current.focus();
         }
-        
+
         // Wait for terminal to be ready, then fit and send dimensions
         setTimeout(() => {
           if (fitAddon.current && terminal.current) {
             // Force a fit to ensure proper dimensions
             fitAddon.current.fit();
-            
+
             // Wait a bit more for fit to complete, then send dimensions
             setTimeout(() => {
               const initPayload = {
@@ -607,9 +583,9 @@ function Shell({ selectedProject, selectedSession, isActive }) {
                 cols: terminal.current.cols,
                 rows: terminal.current.rows
               };
-              
+
               ws.current.send(JSON.stringify(initPayload));
-              
+
               // Also send resize message immediately after init
               setTimeout(() => {
                 if (terminal.current && ws.current && ws.current.readyState === WebSocket.OPEN) {
@@ -633,16 +609,23 @@ function Shell({ selectedProject, selectedSession, isActive }) {
             // Check for URLs in the output and make them clickable
             const urlRegex = /(https?:\/\/[^\s\x1b\x07]+)/g;
             let output = data.data;
-            
+
+            // Check if this is a remote session termination message
+            if (output.includes('Remote Shell session terminated by user')) {
+              setRemoteSessionTerminated(true);
+              setIsConnected(false);
+              // Don't clear the terminal, just show the termination message
+            }
+
             // Find URLs in the text (excluding ANSI escape sequences)
             const urls = [];
             let match;
             while ((match = urlRegex.exec(output.replace(/\x1b\[[0-9;]*m/g, ''))) !== null) {
               urls.push(match[1]);
             }
-            
+
             // If URLs found, log them for potential opening
-            
+
             terminal.current.write(output);
           } else if (data.type === 'url_open') {
             // Handle explicit URL opening requests from server
@@ -655,14 +638,130 @@ function Shell({ selectedProject, selectedSession, isActive }) {
       ws.current.onclose = (event) => {
         setIsConnected(false);
         setIsConnecting(false);
-        
+
         // Clear terminal content when connection closes
         if (terminal.current) {
           terminal.current.clear();
           terminal.current.write('\x1b[2J\x1b[H'); // Clear screen and move cursor to home
         }
-        
+
         // Don't auto-reconnect anymore - user must manually connect
+      };
+
+      ws.current.onerror = (error) => {
+        setIsConnected(false);
+        setIsConnecting(false);
+      };
+    } catch (error) {
+      setIsConnected(false);
+      setIsConnecting(false);
+    }
+  };
+
+  // Plain WebSocket connection function - no Claude CLI, no server caching
+  const connectPlainWebSocket = async () => {
+    if (isConnecting || isConnected) return;
+
+    try {
+      // Get authentication token
+      const token = localStorage.getItem('auth-token');
+      if (!token) {
+        console.error('No authentication token found for Plain Shell WebSocket connection');
+        return;
+      }
+
+      // Fetch server configuration to get the correct WebSocket URL
+      let wsBaseUrl;
+      try {
+        const configResponse = await fetch('/api/config', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        const config = await configResponse.json();
+        wsBaseUrl = config.wsUrl;
+
+        // If the config returns localhost but we're not on localhost, use current host but with API server port
+        if (wsBaseUrl.includes('localhost') && !window.location.hostname.includes('localhost')) {
+          const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          // For development, API server is typically on port 3002 when Vite is on 3001
+          const apiPort = window.location.port === '3001' ? '3002' : window.location.port;
+          wsBaseUrl = `${protocol}//${window.location.hostname}:${apiPort}`;
+        }
+      } catch (error) {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        // For development, API server is typically on port 3002 when Vite is on 3001
+        const apiPort = window.location.port === '3001' ? '3002' : window.location.port;
+        wsBaseUrl = `${protocol}//${window.location.hostname}:${apiPort}`;
+      }
+
+      // Use plain-shell endpoint without caching, include token in WebSocket URL as query parameter
+      const wsUrl = `${wsBaseUrl}/plain-shell?token=${encodeURIComponent(token)}`;
+
+      ws.current = new WebSocket(wsUrl);
+
+      ws.current.onopen = () => {
+        setIsConnected(true);
+        setIsConnecting(false);
+        setSessionHistory(null); // Clear history info when connected
+
+        // Focus the terminal for keyboard input
+        if (terminal.current) {
+          terminal.current.focus();
+        }
+
+        // Wait for terminal to be ready, then fit and send dimensions
+        setTimeout(() => {
+          if (fitAddon.current && terminal.current) {
+            // Force a fit to ensure proper dimensions
+            fitAddon.current.fit();
+
+            // Wait a bit more for fit to complete, then send dimensions
+            setTimeout(() => {
+              const initPayload = {
+                type: 'init',
+                projectPath: selectedProject.fullPath || selectedProject.path,
+                isPlainShell: true, // Flag to indicate plain shell mode
+                cols: terminal.current.cols,
+                rows: terminal.current.rows
+              };
+
+              ws.current.send(JSON.stringify(initPayload));
+
+              // Also send resize message immediately after init
+              setTimeout(() => {
+                if (terminal.current && ws.current && ws.current.readyState === WebSocket.OPEN) {
+                  ws.current.send(JSON.stringify({
+                    type: 'resize',
+                    cols: terminal.current.cols,
+                    rows: terminal.current.rows
+                  }));
+                }
+              }, 100);
+            }, 50);
+          }
+        }, 200);
+      };
+
+      ws.current.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'output') {
+            terminal.current.write(data.data);
+          }
+        } catch (error) {
+        }
+      };
+
+      ws.current.onclose = (event) => {
+        setIsConnected(false);
+        setIsConnecting(false);
+
+        // Clear terminal content when connection closes
+        if (terminal.current) {
+          terminal.current.clear();
+          terminal.current.write('\x1b[2J\x1b[H'); // Clear screen and move cursor to home
+        }
       };
 
       ws.current.onerror = (error) => {
@@ -685,8 +784,8 @@ function Shell({ selectedProject, selectedSession, isActive }) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2z" />
             </svg>
           </div>
-          <h3 className="text-lg font-semibold mb-2">Select a Project</h3>
-          <p>Choose a project to open an interactive shell in that directory</p>
+          <h3 className="text-lg font-semibold mb-2">选择项目</h3>
+          <p>选择一个项目以在该目录中打开交互式终端</p>
         </div>
       </div>
     );
@@ -701,30 +800,27 @@ function Shell({ selectedProject, selectedSession, isActive }) {
             <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : (isConnecting ? 'bg-yellow-500' : 'bg-red-500')}`} />
             {isConnected && (
               <span className="text-xs text-green-300">
-                Connected{shellStatus.reconnectedSessionId && ` (${shellStatus.reconnectedSessionId.slice(0, 8)}...)`}
+                已连接{shellStatus.reconnectedSessionId && ` (${shellStatus.reconnectedSessionId.slice(0, 8)}...)`}
               </span>
             )}
-            {isConnecting && <span className="text-xs text-yellow-300">Connecting...</span>}
-            {!isConnected && !isConnecting && isInitialized && <span className="text-xs text-red-300">Disconnected</span>}
-            
+            {isConnecting && <span className="text-xs text-yellow-300">连接中...</span>}
+            {!isConnected && !isConnecting && isInitialized && <span className="text-xs text-red-300">未连接</span>}
+
             <span className="text-xs text-gray-500 font-mono">
               Shell - {selectedProject.displayName}
             </span>
             {!isInitialized && (
-              <span className="text-xs text-yellow-400">(Initializing...)</span>
+              <span className="text-xs text-yellow-400">(初始化中...)</span>
             )}
-            {isRestarting && (
-              <span className="text-xs text-blue-400">(Restarting...)</span>
-            )}
-            
+
             {/* Shell Session Status */}
             {shellStatus.exists && (
-              <span className="text-xs text-purple-400 flex items-center space-x-1" title={`Shell session running (PID: ${shellStatus.processId})`}>
+              <span className="text-xs text-purple-400 flex items-center space-x-1" title={`Shell会话运行中 (进程ID: ${shellStatus.processId})`}>
                 <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                 </svg>
-                <span>Shell Active</span>
-                {!shellStatus.isConnected && <span className="text-orange-300">(Background)</span>}
+                <span>Shell激活</span>
+                {!shellStatus.isConnected && <span className="text-orange-300">(后台)</span>}
               </span>
             )}
           </div>
@@ -733,7 +829,7 @@ function Shell({ selectedProject, selectedSession, isActive }) {
             <button
               onClick={toggleFullscreen}
               className="text-xs text-gray-400 hover:text-white flex items-center space-x-1"
-              title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+              title={isFullscreen ? "退出全屏" : "进入全屏"}
             >
               {isFullscreen ? (
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -744,7 +840,7 @@ function Shell({ selectedProject, selectedSession, isActive }) {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
                 </svg>
               )}
-              <span>{isFullscreen ? 'Exit' : 'Fullscreen'}</span>
+              <span>{isFullscreen ? '退出全屏' : '全屏'}</span>
             </button>
 
             {/* Kill Remote Shell Button */}
@@ -765,96 +861,116 @@ function Shell({ selectedProject, selectedSession, isActive }) {
               <button
                 onClick={disconnectFromShell}
                 className="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 flex items-center space-x-1"
-                title="Disconnect from shell"
+                title="断开Shell连接"
               >
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
-                <span>Disconnect</span>
+                <span>断开连接</span>
               </button>
             )}
-            
-            <button
-              onClick={restartShell}
-              disabled={isRestarting || isConnected}
-              className="text-xs text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1"
-              title="Restart Shell (disconnect first)"
-            >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              <span>Restart</span>
-            </button>
+
           </div>
         </div>
       </div>
 
       {/* Terminal */}
       <div className="flex-1 p-2 overflow-hidden relative">
-        <div 
-          ref={terminalRef} 
-          className="h-full w-full focus:outline-none" 
-          style={{ 
+        <div
+          ref={terminalRef}
+          className="h-full w-full focus:outline-none"
+          style={{
             outline: 'none',
             overflow: 'hidden' // Let xterm handle its own scrolling
-          }} 
+          }}
           tabIndex={0} // Make focusable for keyboard events
         />
-        
+
         {/* Loading state */}
         {!isInitialized && (
           <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-90">
-            <div className="text-white">Loading terminal...</div>
+            <div className="text-white">加载终端中...</div>
           </div>
         )}
-        
-        {/* Connect button when not connected */}
+
+        {/* Connect buttons when not connected or when remote session was terminated */}
         {isInitialized && !isConnected && !isConnecting && (
           <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-90 p-4">
-            <div className="text-center max-w-sm w-full">
-              <button
-                onClick={connectToShell}
-                className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center space-x-2 text-base font-medium w-full sm:w-auto"
-                title="Connect to shell"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-                <span>Continue in Shell</span>
-              </button>
-              <p className="text-gray-400 text-sm mt-3 px-2">
-                Connect to {selectedProject.displayName} shell
+            <div className="text-center max-w-md w-full">
+              <p className="text-gray-400 text-sm mb-4">
+                连接到 {selectedProject.displayName} 终端
               </p>
-              
 
-              {/* Persistent Shell Status */}
-              {shellStatus.exists && !isConnected && (
-                <div className="mt-2 p-2 bg-purple-900/20 border border-purple-500/30 rounded text-xs text-purple-300">
-                  <div className="flex items-center space-x-1 mb-1">
-                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-                    </svg>
-                    <span>Persistent shell session active</span>
+              {/* Claude Shell Section */}
+              <div className="mb-4">
+                <button
+                  onClick={connectToShell}
+                  className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center space-x-2 text-base font-medium w-full"
+                  title="连接到Claude Shell"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  <span>Claude Shell</span>
+                </button>
+
+                {/* Claude Shell Status - only show for Claude Shell */}
+                {shellStatus.exists && !remoteSessionTerminated && (
+                  <div className="mt-2 p-2 bg-green-900/20 border border-green-500/30 rounded text-xs text-green-300">
+                    <div className="flex items-center space-x-1 mb-1">
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                      <span>Claude Shell会话已激活</span>
+                    </div>
+                    <div>后台运行中 (进程ID: {shellStatus.processId})</div>
+                    <div>创建时间: {new Date(shellStatus.createdAt).toLocaleString()}</div>
+                    <div className="text-green-400 font-medium">点击上方按钮将重新连接到现有Claude Shell会话</div>
                   </div>
-                  <div>Running in background (PID: {shellStatus.processId})</div>
-                  <div>Created: {new Date(shellStatus.createdAt).toLocaleString()}</div>
-                  <div className="text-green-300">Will reconnect to existing session</div>
-                </div>
-              )}
+                )}
+                
+                {/* Show termination message when remote session was terminated */}
+                {remoteSessionTerminated && (
+                  <div className="mt-2 p-2 bg-orange-900/20 border border-orange-500/30 rounded text-xs text-orange-300">
+                    <div className="flex items-center space-x-1 mb-1">
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                      </svg>
+                      <span>远程Shell会话已终止</span>
+                    </div>
+                    <div>会话已被用户手动终止</div>
+                    <div className="text-orange-400 font-medium">点击上方按钮启动新的Shell会话</div>
+                  </div>
+                )}
+              </div>
+
+              {/* Plain Shell Section */}
+              <div>
+                <button
+                  onClick={connectToPlainShell}
+                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center space-x-2 text-base font-medium w-full"
+                  title="连接到普通Shell"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                  <span>普通Shell</span>
+                </button>
+              </div>
             </div>
           </div>
         )}
-        
+
         {/* Connecting state */}
         {isConnecting && (
           <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-90 p-4">
             <div className="text-center max-w-sm w-full">
               <div className="flex items-center justify-center space-x-3 text-yellow-400">
                 <div className="w-6 h-6 animate-spin rounded-full border-2 border-yellow-400 border-t-transparent"></div>
-                <span className="text-base font-medium">Connecting to shell...</span>
+                <span className="text-base font-medium">连接终端中...</span>
               </div>
               <p className="text-gray-400 text-sm mt-3 px-2">
-                Starting Claude CLI in {selectedProject.displayName}
+                正在启动 {selectedProject.displayName} 终端
               </p>
             </div>
           </div>
