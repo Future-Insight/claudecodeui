@@ -56,8 +56,8 @@ export const API_PROVIDERS = {
 // 默认配置
 const DEFAULT_CONFIG = {
   provider: 'claude',
-  model: 'claude-3-5-sonnet-20241022',
-  smallModel: 'claude-3-haiku-20240307',
+  model: '',
+  smallModel: '',
   baseUrl: null,
   authToken: null,
   httpProxy: null,
