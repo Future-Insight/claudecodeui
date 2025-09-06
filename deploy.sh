@@ -16,8 +16,9 @@ npm run build
 chmod -R 775 dist/
 
 # 启动新的tmux会话
-tmux new-session -d -s claudeui-build-server "cd \$(pwd) && export NODE_ENV=production && export \$(grep -v '^#' .env.production | xargs) && npm run server"
+tmux new-session -d -s claudeui-build-server "cd \$(pwd) && export NODE_ENV=production && export \$(grep -v '^#' .env.production | xargs) && npm run server >> /home/test/claudecodeui/server.log 2>&1"
 
 echo "部署完成！新的生产服务器已在tmux会话中启动"
 echo "后端端口: $PORT, 前端端口: $VITE_PORT"
 echo "使用 'tmux attach -t claudeui-build-server' 可以查看服务器状态"
+echo "服务器日志保存在: /home/test/claudecodeui/server.log"

@@ -595,13 +595,36 @@ async function deleteProject(projectName) {
 
 // Add a project manually to the config (without creating folders)
 async function addProjectManually(projectPath, displayName = null) {
-  const absolutePath = path.resolve(projectPath);
+  let resolvedPath = projectPath;
+  
+  // 如果不是绝对路径，处理相对路径
+  if (!path.isAbsolute(projectPath)) {
+    // 首先检查环境变量 CLAUDE_DEFAULT_WORKSPACE
+    const defaultWorkspace = process.env.CLAUDE_DEFAULT_WORKSPACE;
+    
+    if (defaultWorkspace && defaultWorkspace.trim()) {
+      resolvedPath = path.resolve(defaultWorkspace, projectPath);
+      console.log('Using CLAUDE_DEFAULT_WORKSPACE:', defaultWorkspace, '->', resolvedPath);
+    } else {
+      // 如果没有配置环境变量，使用当前工作目录
+      resolvedPath = path.resolve(process.cwd(), projectPath);
+      console.log('Using current working directory:', process.cwd(), '->', resolvedPath);
+    }
+  }
+  
+  const absolutePath = path.resolve(resolvedPath);
 
   try {
     // Check if the path exists
     await fs.access(absolutePath);
   } catch (error) {
-    throw new Error(`Path does not exist: ${absolutePath}`);
+    if (error.code === 'ENOENT') {
+      // Path doesn't exist, create it
+      console.log('Path does not exist, creating:', absolutePath);
+      await fs.mkdir(absolutePath, { recursive: true });
+    } else {
+      throw error;
+    }
   }
 
   // Generate project name (encode path for use as directory name)

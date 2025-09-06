@@ -32,6 +32,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import { useVersionCheck } from './hooks/useVersionCheck';
+import { useSwipeGesture } from './hooks/useSwipeGesture';
 import { api, authenticatedFetch } from './utils/api';
 
 
@@ -85,6 +86,23 @@ function AppContent() {
   // Removed session protection system - sessions run on server, client just displays messages
 
   const { ws, sendMessage, messages } = useWebSocket();
+
+  // 添加滑动手势支持 - 只在移动端启用
+  const swipeRef = useSwipeGesture({
+    onSwipeRight: () => {
+      if (isMobile && !sidebarOpen) {
+        setSidebarOpen(true);
+      }
+    },
+    onSwipeLeft: () => {
+      if (isMobile && sidebarOpen) {
+        setSidebarOpen(false);
+      }
+    },
+    minDistance: 50,    // 最小滑动距离
+    maxTime: 300,       // 最大滑动时间
+    edgeThreshold: 50   // 从左边缘50px内开始的触摸才会触发
+  });
 
   useEffect(() => {
     const checkMobile = () => {
@@ -493,7 +511,7 @@ function AppContent() {
   };
 
   return (
-    <div className="fixed inset-0 flex bg-background">
+    <div ref={swipeRef} className="fixed inset-0 flex bg-background">
       {/* Fixed Desktop Sidebar */}
       {!isMobile && (
         <div className="w-80 flex-shrink-0 border-r border-border bg-card">

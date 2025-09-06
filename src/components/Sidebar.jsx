@@ -158,6 +158,7 @@ function Sidebar({
     return () => clearInterval(timer);
   }, []);
 
+
   // Clear additional sessions when projects list changes (e.g., after refresh)
   useEffect(() => {
     setAdditionalSessions({});
@@ -433,6 +434,7 @@ function Sidebar({
     setNewProjectPath('');
   };
 
+
   const loadMoreSessions = async (project) => {
     // Check if we can load more sessions
     const canLoadMore = project.sessionMeta?.hasMore !== false;
@@ -599,7 +601,7 @@ function Sidebar({
             <Input
               value={newProjectPath}
               onChange={(e) => setNewProjectPath(e.target.value)}
-              placeholder="/path/to/project or relative/path"
+              placeholder="输入项目目录名称"
               className="text-sm focus:ring-2 focus:ring-primary/20"
               autoFocus
               onKeyDown={(e) => {
