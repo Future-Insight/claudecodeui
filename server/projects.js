@@ -156,7 +156,10 @@ async function extractProjectDirectory(projectName) {
     return extractedPath;
 
   } catch (error) {
-    console.error(`Error extracting project directory for ${projectName}:`, error);
+    // Only log error if it's not a "directory not found" error
+    if (error.code !== 'ENOENT') {
+      console.error(`Error extracting project directory for ${projectName}:`, error);
+    }
     // Fall back to decoded project name
     extractedPath = projectName.replace(/-/g, '/');
 

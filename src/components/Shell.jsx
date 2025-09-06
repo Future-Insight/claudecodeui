@@ -5,7 +5,7 @@ import { ClipboardAddon } from '@xterm/addon-clipboard';
 import { WebglAddon } from '@xterm/addon-webgl';
 import 'xterm/css/xterm.css';
 
-// CSS to remove xterm focus outline
+// CSS to remove xterm focus outline and optimize mobile input
 const xtermStyles = `
   .xterm .xterm-screen {
     outline: none !important;
@@ -15,6 +15,53 @@ const xtermStyles = `
   }
   .xterm-screen:focus {
     outline: none !important;
+  }
+  
+  /* Mobile optimization styles */
+  @media (max-width: 768px) {
+    /* Prevent zoom on input focus on mobile */
+    .xterm textarea,
+    .xterm input {
+      font-size: 16px !important;
+    }
+    
+    /* Improve touch scrolling */
+    .xterm .xterm-viewport {
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-y: contain;
+      touch-action: pan-y;
+    }
+    
+    /* Better mobile keyboard experience */
+    .xterm .xterm-helper-textarea {
+      font-size: 16px !important;
+      opacity: 0;
+      position: fixed;
+      left: -9999px;
+      top: 0;
+      width: 1px;
+      height: 1px;
+      z-index: -10;
+      pointer-events: none;
+    }
+    
+    /* Optimize terminal screen for mobile */
+    .xterm .xterm-screen {
+      touch-action: manipulation;
+    }
+  }
+  
+  /* Prevent page scroll when navigating selections in terminal */
+  .shell-container.selection-mode {
+    touch-action: pan-y pinch-zoom;
+    overflow: hidden;
+    overscroll-behavior: contain;
+  }
+  
+  .shell-container.selection-mode .xterm-viewport {
+    touch-action: pan-y;
+    overscroll-behavior-y: contain;
   }
 `;
 
@@ -76,6 +123,7 @@ const clearOldSessionHistory = () => {
 
 function Shell({ selectedProject, selectedSession, isActive }) {
   const terminalRef = useRef(null);
+  const shellContainerRef = useRef(null);
   const terminal = useRef(null);
   const fitAddon = useRef(null);
   const ws = useRef(null);
@@ -87,6 +135,7 @@ function Shell({ selectedProject, selectedSession, isActive }) {
   const [sessionHistory, setSessionHistory] = useState(null);
   const [shellStatus, setShellStatus] = useState({ exists: false });
   const [remoteSessionTerminated, setRemoteSessionTerminated] = useState(false);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
 
   // Check shell session status for current project
   const checkShellStatus = async () => {
@@ -398,14 +447,80 @@ function Shell({ selectedProject, selectedSession, isActive }) {
         return false;
       }
 
-      // Shift + Page Up/Down for line-by-line scrolling
-      if (event.shiftKey && event.key === 'ArrowUp') {
-        terminal.current.scrollLines(-1);
-        return false;
+      // Enhanced arrow key handling for selection navigation
+      if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+        // 检查当前是否在一个选择列表环境中
+        // 如果Shift键按下，执行滚动而不是发送方向键到shell
+        if (event.shiftKey) {
+          if (event.key === 'ArrowUp') {
+            terminal.current.scrollLines(-1);
+          } else {
+            terminal.current.scrollLines(1);
+          }
+          return false;
+        }
+        
+        // 检测是否处于选择模式（通过分析终端输出）
+        const buffer = terminal.current.buffer.active;
+        const cursorY = buffer.cursorY;
+        const currentLine = buffer.getLine(cursorY);
+        
+        if (currentLine && currentLine.translateToString) {
+          const lineText = currentLine.translateToString();
+          // 检测常见的选择提示模式
+          const isSelectionContext = 
+            lineText.includes('►') || 
+            lineText.includes('▼') ||
+            lineText.includes('→') ||
+            lineText.includes('>') ||
+            /^\s*[\d+\)\]]\s/.test(lineText) ||  // 数字列表
+            /^\s*[-*•]\s/.test(lineText) ||      // 项目符号列表
+            lineText.includes('[Y/n]') ||
+            lineText.includes('(y/N)') ||
+            lineText.includes('Select:') ||
+            lineText.includes('Choose:');
+            
+          if (isSelectionContext) {
+            // 设置选择模式状态
+            if (!isSelectionMode) {
+              setIsSelectionMode(true);
+              if (shellContainerRef.current) {
+                shellContainerRef.current.classList.add('selection-mode');
+              }
+            }
+            
+            // 阻止页面滚动
+            event.preventDefault();
+            event.stopPropagation();
+            
+            // 发送方向键到终端
+            if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+              const keyCode = event.key === 'ArrowUp' ? '\u001b[A' : '\u001b[B';
+              ws.current.send(JSON.stringify({
+                type: 'input',
+                data: keyCode
+              }));
+            }
+            return false;
+          } else {
+            // 退出选择模式
+            if (isSelectionMode) {
+              setIsSelectionMode(false);
+              if (shellContainerRef.current) {
+                shellContainerRef.current.classList.remove('selection-mode');
+              }
+            }
+          }
+        }
       }
 
-      if (event.shiftKey && event.key === 'ArrowDown') {
-        terminal.current.scrollLines(1);
+      // Shift + Page Up/Down for line-by-line scrolling (fallback)
+      if (event.shiftKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+        if (event.key === 'ArrowUp') {
+          terminal.current.scrollLines(-1);
+        } else {
+          terminal.current.scrollLines(1);
+        }
         return false;
       }
 
@@ -792,10 +907,72 @@ function Shell({ selectedProject, selectedSession, isActive }) {
   }
 
   return (
-    <div className={`h-full flex flex-col bg-gray-900 w-full ${isFullscreen ? 'fixed inset-0 z-50' : ''}`}>
+    <div 
+      ref={shellContainerRef}
+      className={`shell-container h-full flex flex-col bg-gray-900 w-full ${isFullscreen ? 'fixed inset-0 z-50' : ''} ${isSelectionMode ? 'selection-mode' : ''}`}
+    >
       {/* Header */}
-      <div className="flex-shrink-0 bg-gray-800 border-b border-gray-700 px-4 py-2">
-        <div className="flex items-center justify-between">
+      <div className="flex-shrink-0 bg-gray-800 border-b border-gray-700 px-2 sm:px-4 py-1 sm:py-2">
+        {/* Mobile Layout */}
+        <div className="sm:hidden">
+          <div className="flex items-center justify-between">
+            {/* Left: Status indicator and project name */}
+            <div className="flex items-center space-x-2 min-w-0">
+              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isConnected ? 'bg-green-500' : (isConnecting ? 'bg-yellow-500' : 'bg-red-500')}`} />
+              <span className="text-xs text-gray-400 truncate">
+                {selectedProject.displayName}
+              </span>
+              {shellStatus.exists && (
+                <svg className="w-3 h-3 text-purple-400 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24" title="Shell激活">
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                </svg>
+              )}
+            </div>
+            {/* Right: Compact button group */}
+            <div className="flex items-center space-x-1">
+              <button
+                onClick={toggleFullscreen}
+                className="p-1 text-gray-400 hover:text-white"
+                title={isFullscreen ? "退出全屏" : "全屏"}
+              >
+                {isFullscreen ? (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M15 9v-4.5M15 9h4.5M15 9l5.25-5.25M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 15v4.5M15 15h4.5m0 0l5.25 5.25" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+                  </svg>
+                )}
+              </button>
+              {shellStatus.exists && (
+                <button
+                  onClick={killShellSession}
+                  className="p-1 text-purple-400 hover:text-purple-300"
+                  title="终止Shell"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              )}
+              {isConnected && (
+                <button
+                  onClick={disconnectFromShell}
+                  className="p-1 text-red-400 hover:text-red-300"
+                  title="断开"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+        
+        {/* Desktop Layout */}
+        <div className="hidden sm:flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : (isConnecting ? 'bg-yellow-500' : 'bg-red-500')}`} />
             {isConnected && (
@@ -875,7 +1052,7 @@ function Shell({ selectedProject, selectedSession, isActive }) {
       </div>
 
       {/* Terminal */}
-      <div className="flex-1 p-2 overflow-hidden relative">
+      <div className="flex-1 p-1 sm:p-2 overflow-hidden relative min-h-0">
         <div
           ref={terminalRef}
           className="h-full w-full focus:outline-none"
@@ -885,6 +1062,32 @@ function Shell({ selectedProject, selectedSession, isActive }) {
           }}
           tabIndex={0} // Make focusable for keyboard events
         />
+        
+        {/* Mobile input helper - invisible input for better mobile keyboard support */}
+        {/Mobi|Android/i.test(navigator.userAgent) && (
+          <input
+            type="text"
+            className="absolute opacity-0 -z-10"
+            style={{
+              position: 'fixed',
+              left: '-9999px',
+              top: '0',
+              width: '1px',
+              height: '1px',
+              fontSize: '16px', // Prevent zoom on iOS
+              pointerEvents: 'none'
+            }}
+            aria-hidden="true"
+            tabIndex={-1}
+            onFocus={(e) => {
+              // Immediately blur this input and focus terminal
+              e.target.blur();
+              if (terminal.current) {
+                terminal.current.focus();
+              }
+            }}
+          />
+        )}
 
         {/* Loading state */}
         {!isInitialized && (
